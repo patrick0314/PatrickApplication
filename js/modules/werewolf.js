@@ -1074,7 +1074,7 @@ const WerewolfModule = {
     const targetCards = playerCount + 3;
     const selectedCount = this.getSelectedRoleTotalCount();
     const canStartGame = (selectedCount === targetCards);
-    const allReady = this.state.players.length >= 2 && this.state.players.every(p => p.isReady);
+    const allReady = this.state.players.length >= 1 && this.state.players.every(p => p.isReady);
     const now = Date.now();
     const elapsed = now - (this.state.lastReactionTime || 0);
     const isCoolingDown = elapsed < 10000;
@@ -1185,9 +1185,9 @@ const WerewolfModule = {
     const targetCards = playerCount + 3;
     const selectedCount = this.getSelectedRoleTotalCount();
     const isCardCountValid = (selectedCount === targetCards);
-    const unreadyPlayers = this.state.players.filter(p => !p.isReady && !p.isHost);
-    const allOthersReady = (playerCount === 1) || (unreadyPlayers.length === 0);
-    const canStartGame = isCardCountValid && allOthersReady;
+    const readyCount = this.state.players.filter(p => p.isReady).length;
+    const allPlayersReady = this.state.players.length > 0 && (readyCount === this.state.players.length);
+    const canStartGame = isCardCountValid && allPlayersReady;
 
     return `
       ${isHost ? `
@@ -1204,8 +1204,8 @@ const WerewolfModule = {
           <span>🚀 開始遊戲 (發牌)</span>
           ${!isCardCountValid 
             ? `<span class="text-[10px] font-normal opacity-85">(需選 ${targetCards} 張，目前 ${selectedCount} 張)</span>` 
-            : (!allOthersReady 
-                ? `<span class="text-[10px] font-normal opacity-85">(⏳ 等待玩家準備 ${this.state.players.filter(p => p.isReady).length}/${playerCount})</span>` 
+            : (!allPlayersReady 
+                ? `<span class="text-[10px] font-normal opacity-85">(⏳ 等待全員就緒 ${readyCount}/${playerCount})</span>` 
                 : '')}
         </button>
       ` : ''}
@@ -1460,7 +1460,7 @@ const WerewolfModule = {
     // 4. Update all ready status summary
     const summaryEl = document.getElementById('room-status-summary');
     if (summaryEl) {
-      const allReady = this.state.players.length >= 2 && this.state.players.every(p => p.isReady);
+      const allReady = this.state.players.length >= 1 && this.state.players.every(p => p.isReady);
       summaryEl.textContent = allReady ? '🎉 全員就緒！' : '等待準備中...';
       summaryEl.className = `text-[10px] font-bold ${allReady ? 'text-emerald-500' : 'text-slate-400'}`;
     }
@@ -1504,6 +1504,7 @@ const WerewolfModule = {
   },
 
   getPlayerName(id) {
+    if (id === 'NO_WEREWOLF') return '場上沒有狼人 🕊️';
     if (id === this.state.myPlayerId) return `${this.state.myPlayerName} (我)`;
     const p = this.state.players.find(x => x.id === id);
     return p ? p.name : '未知玩家';
@@ -1534,13 +1535,13 @@ const WerewolfModule = {
       return;
     }
 
-    // Check if other players are ready
-    if (playerCount >= 2) {
-      const unreadyPlayers = this.state.players.filter(p => !p.isReady && !p.isHost);
-      if (unreadyPlayers.length > 0) {
-        App.showToast(`尚有玩家尚未準備：${unreadyPlayers.map(p => p.name).join('、')}`, 'warning');
-        return;
-      }
+    // 檢查是否全員（包含房主自己）皆已準備就緒
+    const unreadyPlayers = this.state.players.filter(p => !p.isReady);
+    if (unreadyPlayers.length > 0) {
+      const names = unreadyPlayers.map(p => p.id === this.state.myPlayerId ? '您自己(房主)' : p.name).join('、');
+      App.showToast(`尚有玩家尚未準備就緒：${names}`, 'warning');
+      if ('vibrate' in navigator) navigator.vibrate([80, 40, 80]);
+      return;
     }
 
     // Build and shuffle deck
@@ -2176,7 +2177,7 @@ const WerewolfModule = {
     this.clearGameTimer();
 
     const votes = this.state.gameData.votes || {};
-    const voteCounts = {};
+    const voteCounts = { 'NO_WEREWOLF': 0 };
     this.state.players.forEach(p => { voteCounts[p.id] = 0; });
 
     Object.values(votes).forEach(targetId => {
@@ -2185,19 +2186,26 @@ const WerewolfModule = {
       }
     });
 
-    const maxVotes = Math.max(0, ...Object.values(voteCounts));
+    const noWolfVotes = voteCounts['NO_WEREWOLF'] || 0;
+    const playerVoteCounts = {};
+    this.state.players.forEach(p => { playerVoteCounts[p.id] = voteCounts[p.id] || 0; });
+    const maxPlayerVotes = Math.max(0, ...Object.values(playerVoteCounts));
     let executedPlayers = [];
 
-    if (maxVotes >= 2) {
+    // 若「沒有狼人」得票數達到 2 票且大於等於玩家最高票，則裁定無人處決
+    if (noWolfVotes >= 2 && noWolfVotes >= maxPlayerVotes) {
+      executedPlayers = [];
+      this.state.gameData.nightLogs.push(`🕊️ 投票裁定：多數玩家（${noWolfVotes} 票）認為「場上沒有狼人」，無人被處決`);
+    } else if (maxPlayerVotes >= 2) {
       executedPlayers = this.state.players
-        .filter(p => voteCounts[p.id] === maxVotes)
+        .filter(p => voteCounts[p.id] === maxPlayerVotes)
         .map(p => p.id);
 
       const hunterVictims = [];
       executedPlayers.forEach(pId => {
         if (this.state.gameData.currentCards[pId] === 'hunter') {
           const huntedTarget = votes[pId];
-          if (huntedTarget && !executedPlayers.includes(huntedTarget)) {
+          if (huntedTarget && huntedTarget !== 'NO_WEREWOLF' && !executedPlayers.includes(huntedTarget)) {
             hunterVictims.push(huntedTarget);
             const hName = this.getPlayerName(pId);
             const tName = this.getPlayerName(huntedTarget);
@@ -2224,10 +2232,14 @@ const WerewolfModule = {
       } else {
         if (liveWolvesExist) {
           winningTeam = 'werewolf';
-          winReason = '平安夜無人傷亡，但場上有狼人存活！狼人獲勝 🐺';
+          winReason = (noWolfVotes >= 2 && noWolfVotes >= maxPlayerVotes)
+            ? `投票裁定「場上沒有狼人」（${noWolfVotes} 票），但場上實際有狼人存活！狼人獲勝 🐺`
+            : '平安夜無人傷亡，但場上有狼人存活！狼人獲勝 🐺';
         } else {
           winningTeam = 'villager';
-          winReason = '平安夜無人傷亡，且場上無狼人（狼全在底牌）！好人成功識破獲勝 🎉';
+          winReason = (noWolfVotes >= 2 && noWolfVotes >= maxPlayerVotes)
+            ? `全員成功識破「場上沒有狼人」（${noWolfVotes} 票，狼全在底牌）！好人獲勝 🎉`
+            : '平安夜無人傷亡，且場上無狼人（狼全在底牌）！好人成功識破獲勝 🎉';
         }
       }
     }
@@ -2973,9 +2985,36 @@ const WerewolfModule = {
 
         <!-- Voting Prompt Card -->
         <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
-          <p class="text-xs font-bold text-slate-700 dark:text-slate-300">請點擊下方玩家頭像投出選票：</p>
+          <p class="text-xs font-bold text-slate-700 dark:text-slate-300">請點擊下方對象投出選票：</p>
 
           <div class="grid grid-cols-2 gap-2.5">
+            <!-- No Werewolf Option (場上沒有狼人) -->
+            <button 
+              onclick="WerewolfModule.selectVoteTarget('NO_WEREWOLF')"
+              ${hasVoted ? 'disabled' : ''}
+              class="tap-scale col-span-2 p-3.5 rounded-2xl border text-left transition-all ${
+                myVote === 'NO_WEREWOLF' 
+                  ? 'bg-rose-600 border-rose-500 text-white shadow-lg shadow-rose-600/30' 
+                  : (selectedTarget === 'NO_WEREWOLF' 
+                      ? 'bg-indigo-600 border-indigo-400 text-white shadow-md' 
+                      : 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50 text-slate-800 dark:text-slate-200')
+              }"
+            >
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2.5">
+                  <div class="w-9 h-9 rounded-xl ${selectedTarget === 'NO_WEREWOLF' || myVote === 'NO_WEREWOLF' ? 'bg-white/20' : 'bg-emerald-500 text-white'} flex items-center justify-center font-black text-base shrink-0">
+                    🕊️
+                  </div>
+                  <div>
+                    <div class="text-xs font-black">場上沒有狼人 (平安夜)</div>
+                    <div class="text-[10px] ${selectedTarget === 'NO_WEREWOLF' || myVote === 'NO_WEREWOLF' ? 'text-white/80' : 'text-slate-400'}">若認為狼全在中央底牌、場上無狼需處決，請投此項</div>
+                  </div>
+                </div>
+                ${myVote === 'NO_WEREWOLF' ? `
+                  <div class="text-[10px] font-bold text-rose-200">✓ 已投此項</div>
+                ` : ''}
+              </div>
+            </button>
             ${this.state.players.map(p => {
               const isSelected = selectedTarget === p.id;
               const isMe = p.id === this.state.myPlayerId;
@@ -3110,13 +3149,19 @@ const WerewolfModule = {
                 `;
               }).join('')}
             </div>
+          ` : (voteCounts['NO_WEREWOLF'] >= 2 ? `
+            <div class="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/30 text-center">
+              <span class="text-lg">🕊️</span>
+              <p class="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">平安夜：投票裁定「場上沒有狼人」！</p>
+              <p class="text-[10px] text-slate-400">「場上沒有狼人」獲得 ${voteCounts['NO_WEREWOLF']} 票，無人被處決</p>
+            </div>
           ` : `
             <div class="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/30 text-center">
               <span class="text-lg">🕊️</span>
               <p class="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">平安夜：無人被處決！</p>
               <p class="text-[10px] text-slate-400">所有人得票數皆未達 2 票處決門檻</p>
             </div>
-          `}
+          `)}
         </div>
 
         <!-- Players Identity Reveal -->
@@ -3127,6 +3172,17 @@ const WerewolfModule = {
           </h3>
 
           <div class="space-y-2">
+            ${voteCounts['NO_WEREWOLF'] ? `
+              <div class="p-3 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <span class="text-base">🕊️</span>
+                  <span class="text-xs font-bold text-emerald-800 dark:text-emerald-300">場上沒有狼人</span>
+                </div>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
+                  得 ${voteCounts['NO_WEREWOLF']} 票
+                </span>
+              </div>
+            ` : ''}
             ${this.state.players.map(p => {
               const initRole = initialCards[p.id];
               const finalRole = finalCards[p.id];
