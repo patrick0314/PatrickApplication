@@ -1,6 +1,6 @@
 /**
- * Patrick's App - Settings & Data Management Module
- * Theme settings, JSON Backup/Restore, Mobile installation guide
+ * Patrick's App - Settings Module
+ * Nickname management (no avatar), Theme selection, Mobile installation guide
  */
 const SettingsModule = {
   id: 'settings',
@@ -8,30 +8,48 @@ const SettingsModule = {
   icon: 'settings',
 
   render() {
-    const settings = StorageManager.get('settings', { theme: 'system', userName: 'Patrick' });
+    const settings = StorageManager.get('settings', { theme: 'system', userName: 'Default Name' });
+    const currentName = settings.userName || 'Default Name';
 
     return `
       <div class="space-y-5 fade-in pb-16">
         <!-- Header -->
         <div class="pt-2">
-          <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">系統設定</h1>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">個人偏好設定、離線備份與手機安裝</p>
+          <h1 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white">系統設定</h1>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">個人偏好設定與手機安裝</p>
         </div>
 
-        <!-- User Profile Card -->
-        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
-          <div class="flex items-center space-x-3">
-            <div class="h-12 w-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-lg shadow-md shadow-indigo-600/30">
-              ${(settings.userName || 'P').charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <h2 class="text-sm font-bold text-slate-900 dark:text-white">${settings.userName || 'Patrick'}</h2>
-              <p class="text-xs text-slate-400">專屬個人工作站使用者</p>
-            </div>
+        <!-- Nickname Configuration Card (No Avatar) -->
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+          <div class="flex items-center space-x-2">
+            <i data-lucide="user" class="w-4 h-4 text-indigo-500"></i>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">個人稱呼</h2>
           </div>
-          <button onclick="SettingsModule.editUserName()" class="text-xs text-indigo-600 dark:text-indigo-400 font-semibold px-3 py-1.5 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40">
-            修改暱稱
-          </button>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              使用者暱稱
+            </label>
+            <div class="flex space-x-2">
+              <input 
+                type="text" 
+                id="nickname-input" 
+                value="${currentName}" 
+                placeholder="輸入您的暱稱..."
+                onkeydown="if(event.key==='Enter') SettingsModule.saveUserName()"
+                class="flex-1 px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+              />
+              <button 
+                onclick="SettingsModule.saveUserName()" 
+                class="tap-scale px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/25 shrink-0"
+              >
+                儲存
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1.5">
+              此暱稱將用於首頁的個人問候語（預設為 Default Name）。
+            </p>
+          </div>
         </div>
 
         <!-- Appearance Section -->
@@ -65,45 +83,6 @@ const SettingsModule = {
             }">
               <i data-lucide="moon-star" class="w-5 h-5 mb-1.5"></i>
               深色模式
-            </button>
-          </div>
-        </div>
-
-        <!-- Data Backup & Restore -->
-        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
-          <div class="flex items-center space-x-2">
-            <i data-lucide="hard-drive" class="w-4 h-4 text-emerald-500"></i>
-            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">資料安全與離線備份</h2>
-          </div>
-
-          <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-            所有資料均保存在您手機的本機空間，具備最高隱私性。未來新增功能後的數據皆可隨時在此下載完整備份。
-          </p>
-
-          <div class="space-y-2 pt-1">
-            <button onclick="StorageManager.exportBackup(); App.showToast('備份檔案已下載！', 'success');" class="tap-scale w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-xs font-semibold text-slate-800 dark:text-slate-200">
-              <div class="flex items-center space-x-2.5">
-                <i data-lucide="download" class="w-4 h-4 text-emerald-500"></i>
-                <span>匯出 JSON 備份檔到手機</span>
-              </div>
-              <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
-            </button>
-
-            <label class="tap-scale w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
-              <div class="flex items-center space-x-2.5">
-                <i data-lucide="upload" class="w-4 h-4 text-indigo-500"></i>
-                <span>匯入 JSON 備份還原資料</span>
-              </div>
-              <input type="file" accept=".json" onchange="SettingsModule.handleImport(event)" class="hidden" />
-              <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
-            </label>
-
-            <button onclick="SettingsModule.confirmClearData()" class="tap-scale w-full flex items-center justify-between p-3.5 rounded-2xl bg-red-50/50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-100/50">
-              <div class="flex items-center space-x-2.5">
-                <i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i>
-                <span>重置所有本機資料</span>
-              </div>
-              <i data-lucide="chevron-right" class="w-4 h-4 text-red-400"></i>
             </button>
           </div>
         </div>
@@ -155,6 +134,20 @@ const SettingsModule = {
     `;
   },
 
+  saveUserName() {
+    const input = document.getElementById('nickname-input');
+    if (!input) return;
+    const newName = input.value.trim();
+    if (!newName) {
+      App.showToast('暱稱不能為空', 'error');
+      return;
+    }
+    const settings = StorageManager.get('settings', {});
+    settings.userName = newName;
+    StorageManager.set('settings', settings);
+    App.showToast('暱稱已更新！', 'success');
+  },
+
   setTheme(theme) {
     const settings = StorageManager.get('settings', {});
     settings.theme = theme;
@@ -162,42 +155,6 @@ const SettingsModule = {
     App.applyTheme();
     App.render();
     App.showToast(`已切換主題：${theme === 'system' ? '跟隨系統' : theme === 'dark' ? '深色模式' : '明亮模式'}`, 'info');
-  },
-
-  editUserName() {
-    const settings = StorageManager.get('settings', {});
-    const newName = prompt('請輸入您的暱稱：', settings.userName || 'Patrick');
-    if (newName && newName.trim()) {
-      settings.userName = newName.trim();
-      StorageManager.set('settings', settings);
-      App.showToast('暱稱已更新！', 'success');
-      App.render();
-    }
-  },
-
-  handleImport(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = StorageManager.importBackup(e.target.result);
-      if (result.success) {
-        App.showToast(`成功還原 ${result.count} 項資料！`, 'success');
-        setTimeout(() => location.reload(), 600);
-      } else {
-        alert('匯入失敗：' + result.error);
-      }
-    };
-    reader.readAsText(file);
-  },
-
-  confirmClearData() {
-    if (confirm('確定要清除所有本機資料並重置為預設狀態嗎？')) {
-      StorageManager.clearAll();
-      App.showToast('已重置所有本機資料', 'info');
-      setTimeout(() => location.reload(), 500);
-    }
   }
 };
 
