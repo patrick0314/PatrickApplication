@@ -954,14 +954,18 @@ const WerewolfModule = {
     App.showToast('已發送全房間連線測試廣播！', 'success');
   },
 
-  copyRoomLink() {
-    const baseUrl = window.location.origin + window.location.pathname;
-    const shareUrl = `${baseUrl}#room=${this.state.roomId}`;
-    navigator.clipboard.writeText(shareUrl).then(() => {
-      App.showToast(`房間連結已複製！快發給朋友吧`, 'success');
+  copyRoomCode() {
+    const code = this.state.roomId;
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(() => {
+      App.showToast(`房間代號 ${code} 已複製！`, 'success');
     }).catch(() => {
-      App.showToast(`房間代號為: ${this.state.roomId}`, 'info');
+      App.showToast(`房間代號為: ${code}`, 'info');
     });
+  },
+
+  copyRoomLink() {
+    this.copyRoomCode();
   },
 
   showFloatingReaction(emoji, fromName) {
@@ -1031,11 +1035,8 @@ const WerewolfModule = {
             </div>
 
             <h1 class="text-2xl font-black tracking-tight text-white">一夜狼人殺</h1>
-            <p class="text-xs text-slate-300 mt-2 leading-relaxed opacity-90">
-              跨手機多人即時連線系統。任何人透過房間代碼即可加入，無須同一 Wi-Fi，4G/5G 皆可連線！
-            </p>
 
-            <div class="mt-4 inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold">
+            <div class="mt-3 inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold">
               <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               <span>WSS 加密通道已就緒 (延遲 < 50ms)</span>
             </div>
@@ -1102,15 +1103,6 @@ const WerewolfModule = {
           </div>
         </div>
 
-        <!-- Connection Feature Showcase -->
-        <div class="rounded-2xl p-4 bg-slate-100/70 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800/60 space-y-2">
-          <p class="text-xs font-bold text-slate-700 dark:text-slate-300">連線特色說明</p>
-          <ul class="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 leading-relaxed">
-            <li>• 支援跨手機、跨系統（iPhone 與 Android）即時連線。</li>
-            <li>• 不限同一 Wi-Fi，外網行動網路（4G/5G）隨時可玩。</li>
-            <li>• 毫秒級房間同步，房主點擊廣播全房間手機秒級收到。</li>
-          </ul>
-        </div>
       </div>
     `;
   },
@@ -1155,10 +1147,10 @@ const WerewolfModule = {
         <!-- Room Identity Banner (Removed 'x人在線', only keeps host/member identity) -->
         <div class="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-5 text-white border border-indigo-900/60 shadow-xl flex items-center justify-between">
           <div>
-            <p class="text-[10px] uppercase font-bold text-indigo-300 tracking-wider">房間代碼 (點擊可分享)</p>
+            <p class="text-[10px] uppercase font-bold text-indigo-300 tracking-wider">房間代碼 (點擊可複製)</p>
             <div class="flex items-center space-x-2 mt-0.5">
               <span class="text-3xl font-black tracking-widest text-indigo-400">#${this.state.roomId}</span>
-              <button onclick="WerewolfModule.copyRoomLink()" class="tap-scale p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-indigo-200">
+              <button onclick="WerewolfModule.copyRoomCode()" class="tap-scale p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-indigo-200" title="複製房間代碼">
                 <i data-lucide="copy" class="w-4 h-4"></i>
               </button>
             </div>
