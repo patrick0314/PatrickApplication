@@ -49,6 +49,17 @@ const WerewolfModule = {
         this.state.roomId = match[1].toUpperCase();
       }
     }
+
+    if (!this._visibilityBound) {
+      this._visibilityBound = true;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this.state.currentView === 'room' && this.state.roomId && this.state.client) {
+          if (!this.state.isHost) {
+            this.broadcast({ type: 'REQUEST_SYNC' });
+          }
+        }
+      });
+    }
   },
 
   getRoomTopic(roomId) {
@@ -70,7 +81,7 @@ const WerewolfModule = {
         clientId: clientId,
         clean: true,
         connectTimeout: 5000,
-        keepalive: 30
+        keepalive: 15
       });
 
       this.state.client = client;
@@ -299,16 +310,32 @@ const WerewolfModule = {
         case 'PLAYER_LEAVE':
           const leftPlayer = this.state.players.find(p => p.id === data.playerId);
           if (leftPlayer) {
+            const wasHost = leftPlayer.isHost;
             this.state.players = this.state.players.filter(p => p.id !== data.playerId);
             this.addSystemMessage(`${leftPlayer.name} 離開了房間`);
-            if (leftPlayer.isHost && this.state.players.length > 0) {
+            if (wasHost && this.state.players.length > 0) {
               this.state.players[0].isHost = true;
               if (this.state.players[0].id === this.state.myPlayerId) {
                 this.state.isHost = true;
                 App.showToast('原房主已離開，您已成為新房主 👑', 'info');
+                this.broadcast({
+                  type: 'SYNC_STATE',
+                  players: this.state.players,
+                  hostId: this.state.myPlayerId
+                });
               }
             }
             this.updateRoomUI();
+          }
+          break;
+
+        case 'REQUEST_SYNC':
+          if (this.state.isHost) {
+            this.broadcast({
+              type: 'SYNC_STATE',
+              players: this.state.players,
+              hostId: this.state.myPlayerId
+            });
           }
           break;
 
@@ -666,7 +693,7 @@ const WerewolfModule = {
           </div>
 
           <div class="text-right">
-            <span class="text-xs font-bold text-indigo-200 bg-white/10 px-3 py-1.5 rounded-full inline-block">
+            <span id="room-identity-badge" class="text-xs font-bold text-indigo-200 bg-white/10 px-3 py-1.5 rounded-full inline-block">
               ${this.state.isHost ? '👑 您是房主' : '👤 房間成員'}
             </span>
           </div>
@@ -689,18 +716,10 @@ const WerewolfModule = {
           </div>
         </div>
 
-        <!-- Host Broadcast Control (If Host) -->
-        ${this.state.isHost ? `
-          <div class="p-3.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <i data-lucide="radio" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
-              <span class="text-xs font-bold text-slate-800 dark:text-slate-200">房主控制台</span>
-            </div>
-            <button onclick="WerewolfModule.sendBroadcastTest()" class="tap-scale px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm">
-              發起全體連線震動測試
-            </button>
-          </div>
-        ` : ''}
+        <!-- Host Broadcast Control Area (Dynamically synced) -->
+        <div id="room-host-control-area">
+          ${this.renderHostControls()}
+        </div>
 
         <!-- Interactive & Ready Section (Natural Layout - No Overlap!) -->
         <div class="space-y-3 pt-1">
@@ -805,6 +824,21 @@ const WerewolfModule = {
     `;
   },
 
+  renderHostControls() {
+    if (!this.state.isHost) return '';
+    return `
+      <div class="p-3.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between fade-in">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="radio" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
+          <span class="text-xs font-bold text-slate-800 dark:text-slate-200">房主控制台</span>
+        </div>
+        <button onclick="WerewolfModule.sendBroadcastTest()" class="tap-scale px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm">
+          發起全體連線震動測試
+        </button>
+      </div>
+    `;
+  },
+
   // Synchronize entire room interface
   updateRoomUI() {
     if (this.state.currentView !== 'room') return;
@@ -830,6 +864,18 @@ const WerewolfModule = {
       const allReady = this.state.players.length >= 2 && this.state.players.every(p => p.isReady);
       summaryEl.textContent = allReady ? '🎉 全員就緒！' : '等待準備中...';
       summaryEl.className = `text-[10px] font-bold ${allReady ? 'text-emerald-500' : 'text-slate-400'}`;
+    }
+
+    // 5. Update host identity badge
+    const badgeEl = document.getElementById('room-identity-badge');
+    if (badgeEl) {
+      badgeEl.textContent = this.state.isHost ? '👑 您是房主' : '👤 房間成員';
+    }
+
+    // 6. Update host controls area (e.g. connection test button)
+    const hostControlEl = document.getElementById('room-host-control-area');
+    if (hostControlEl) {
+      hostControlEl.innerHTML = this.renderHostControls();
     }
 
     if (window.lucide) lucide.createIcons();
