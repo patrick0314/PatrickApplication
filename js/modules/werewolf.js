@@ -52,6 +52,7 @@ const WerewolfModule = {
       team: 'werewolf',
       teamName: '狼人陣營',
       icon: '🐺',
+      minCount: 1, // 狼人下限為 1
       maxCount: 2,
       order: 1,
       desc: '夜間互相確認同伴；若為孤狼可看 1 張中央底牌。'
@@ -61,7 +62,8 @@ const WerewolfModule = {
       name: '爪牙',
       team: 'werewolf',
       teamName: '狼人陣營',
-      icon: '😈',
+      icon: '🦊', // 狐狸造型
+      minCount: 0,
       maxCount: 1,
       order: 2,
       desc: '夜間睜眼看誰是狼人；狼人不知爪牙，狼全在底牌時爪牙不死即勝。'
@@ -71,7 +73,8 @@ const WerewolfModule = {
       name: '守夜人',
       team: 'villager',
       teamName: '村民陣營',
-      icon: '🛡️',
+      icon: '👮', // 警察造型
+      minCount: 0,
       maxCount: 2,
       order: 3,
       desc: '夜間睜眼尋找另一名守夜人，藉此確認同伴是好人身份。'
@@ -82,6 +85,7 @@ const WerewolfModule = {
       team: 'villager',
       teamName: '村民陣營',
       icon: '🔮',
+      minCount: 0,
       maxCount: 1,
       order: 4,
       desc: '夜間可查驗 1 位其他玩家的手牌，或查驗中央 2 張底牌。'
@@ -91,7 +95,8 @@ const WerewolfModule = {
       name: '強盜',
       team: 'villager',
       teamName: '村民陣營',
-      icon: '🦹',
+      icon: '🥷', // 忍者造型
+      minCount: 0,
       maxCount: 1,
       order: 5,
       desc: '夜間可與 1 位其他玩家交換手牌，並查看自己獲得的新身份。'
@@ -256,8 +261,9 @@ const WerewolfModule = {
     const roleDef = this.ROLES[roleId];
     if (!roleDef) return;
 
-    const currentCount = this.state.selectedRoles[roleId] || 0;
-    const newCount = Math.max(0, Math.min(roleDef.maxCount, currentCount + delta));
+    const minCount = roleDef.minCount || 0;
+    const currentCount = this.state.selectedRoles[roleId] !== undefined ? this.state.selectedRoles[roleId] : minCount;
+    const newCount = Math.max(minCount, Math.min(roleDef.maxCount, currentCount + delta));
     if (newCount === currentCount) return;
 
     this.state.selectedRoles[roleId] = newCount;
@@ -1220,7 +1226,7 @@ const WerewolfModule = {
                       }">
                         ${role.teamName}
                       </span>
-                      <span class="text-[9px] text-slate-400">上限 ${role.maxCount}</span>
+                      <span class="text-[9px] text-slate-400">${role.minCount > 0 ? `下限 ${role.minCount} / 上限 ${role.maxCount}` : `上限 ${role.maxCount}`}</span>
                     </div>
                     <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">${role.desc}</p>
                   </div>
@@ -1233,7 +1239,7 @@ const WerewolfModule = {
                       <button 
                         onclick="WerewolfModule.adjustRoleCount('${role.id}', -1)"
                         class="tap-scale h-7 w-7 rounded-lg flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:pointer-events-none"
-                        ${count <= 0 ? 'disabled' : ''}
+                        ${count <= (role.minCount || 0) ? 'disabled' : ''}
                       >
                         <i data-lucide="minus" class="w-3.5 h-3.5"></i>
                       </button>
