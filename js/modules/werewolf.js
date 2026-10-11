@@ -272,7 +272,6 @@ const WerewolfModule = {
                 joinedAt: Date.now()
               });
             } else {
-              // keep my own local ready state authoritative
               myself.isReady = this.state.isReady;
             }
             this.state.players = currentPlayers;
@@ -536,7 +535,7 @@ const WerewolfModule = {
     `;
   },
 
-  // View 2: Room Screen (Clean Layout without Overlapping)
+  // View 2: Room Screen (Removed online count from room code card, accurate roster count)
   renderRoomView() {
     const isMeReady = this.state.isReady;
     const allReady = this.state.players.length >= 2 && this.state.players.every(p => p.isReady);
@@ -560,7 +559,7 @@ const WerewolfModule = {
           </div>
         </div>
 
-        <!-- Room Identity Banner -->
+        <!-- Room Identity Banner (Removed 'x人在線', only keeps host/member identity) -->
         <div class="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-5 text-white border border-indigo-900/60 shadow-xl flex items-center justify-between">
           <div>
             <p class="text-[10px] uppercase font-bold text-indigo-300 tracking-wider">房間代碼 (點擊可分享)</p>
@@ -573,21 +572,18 @@ const WerewolfModule = {
           </div>
 
           <div class="text-right">
-            <span id="room-player-count" class="text-xs font-bold bg-white/10 px-3 py-1 rounded-full text-indigo-200">
-              ${this.state.players.length} 人在線
-            </span>
-            <p class="text-[10px] text-slate-400 mt-1">
+            <span class="text-xs font-bold text-indigo-200 bg-white/10 px-3 py-1.5 rounded-full inline-block">
               ${this.state.isHost ? '👑 您是房主' : '👤 房間成員'}
-            </p>
+            </span>
           </div>
         </div>
 
-        <!-- Player Roster (Realtime Sync) -->
+        <!-- Player Roster (Accurate dynamic count in title) -->
         <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
           <div class="flex items-center justify-between">
             <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center space-x-1.5">
               <i data-lucide="users" class="w-4 h-4 text-indigo-500"></i>
-              <span>房間玩家列表 (${this.state.players.length})</span>
+              <span>房間玩家列表 (<span id="room-player-count">${this.state.players.length}</span>)</span>
             </h2>
             <span id="room-status-summary" class="text-[10px] font-bold ${allReady ? 'text-emerald-500' : 'text-slate-400'}">
               ${allReady ? '🎉 全員就緒！' : '等待準備中...'}
@@ -696,7 +692,6 @@ const WerewolfModule = {
     }).join('');
   },
 
-  // Update Ready Button DOM specifically
   updateReadyButtonUI() {
     const btn = document.getElementById('room-ready-btn');
     if (!btn) return;
@@ -718,7 +713,7 @@ const WerewolfModule = {
   updateRoomUI() {
     if (this.state.currentView !== 'room') return;
 
-    // 1. Update player list
+    // 1. Update player list cards
     const container = document.getElementById('players-list-container');
     if (container) {
       container.innerHTML = this.renderPlayerCards();
@@ -727,12 +722,13 @@ const WerewolfModule = {
     // 2. Update ready button text, icon, and colors
     this.updateReadyButtonUI();
 
-    // 3. Update player count and summary
+    // 3. Update player count accurately in player roster header: 房間玩家列表 (X)
     const countEl = document.getElementById('room-player-count');
     if (countEl) {
-      countEl.textContent = `${this.state.players.length} 人在線`;
+      countEl.textContent = this.state.players.length;
     }
 
+    // 4. Update all ready status summary
     const summaryEl = document.getElementById('room-status-summary');
     if (summaryEl) {
       const allReady = this.state.players.length >= 2 && this.state.players.every(p => p.isReady);
