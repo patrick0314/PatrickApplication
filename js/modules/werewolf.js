@@ -22,7 +22,19 @@ const WerewolfModule = {
     players: [],
     messages: [],
     brokerIndex: 0,
-    lastReactionTime: 0
+    lastReactionTime: 0,
+    selectedRoles: {
+      werewolf: 2,
+      minion: 0,
+      mason: 0,
+      seer: 1,
+      robber: 1,
+      troublemaker: 1,
+      insomniac: 0,
+      hunter: 0,
+      villager: 1
+    },
+    isCustomRoles: false
   },
 
   _reactionTimer: null,
@@ -31,6 +43,255 @@ const WerewolfModule = {
     'wss://broker.emqx.io:8084/mqtt',
     'wss://broker.hivemq.com:8884/mqtt'
   ],
+
+  // 9 Core Roles Definition
+  ROLES: {
+    werewolf: {
+      id: 'werewolf',
+      name: '狼人',
+      team: 'werewolf',
+      teamName: '狼人陣營',
+      icon: '🐺',
+      maxCount: 2,
+      order: 1,
+      desc: '夜間互相確認同伴；若為孤狼可看 1 張中央底牌。'
+    },
+    minion: {
+      id: 'minion',
+      name: '爪牙',
+      team: 'werewolf',
+      teamName: '狼人陣營',
+      icon: '😈',
+      maxCount: 1,
+      order: 2,
+      desc: '夜間睜眼看誰是狼人；狼人不知爪牙，狼全在底牌時爪牙不死即勝。'
+    },
+    mason: {
+      id: 'mason',
+      name: '守夜人',
+      team: 'villager',
+      teamName: '村民陣營',
+      icon: '🛡️',
+      maxCount: 2,
+      order: 3,
+      desc: '夜間睜眼尋找另一名守夜人，藉此確認同伴是好人身份。'
+    },
+    seer: {
+      id: 'seer',
+      name: '預言家',
+      team: 'villager',
+      teamName: '村民陣營',
+      icon: '🔮',
+      maxCount: 1,
+      order: 4,
+      desc: '夜間可查驗 1 位其他玩家的手牌，或查驗中央 2 張底牌。'
+    },
+    robber: {
+      id: 'robber',
+      name: '強盜',
+      team: 'villager',
+      teamName: '村民陣營',
+      icon: '🦹',
+      maxCount: 1,
+      order: 5,
+      desc: '夜間可與 1 位其他玩家交換手牌，並查看自己獲得的新身份。'
+    },
+    troublemaker: {
+      id: 'troublemaker',
+      name: '搗蛋鬼',
+      team: 'villager',
+      teamName: '村民陣營',
+      icon: '🎭',
+      maxCount: 1,
+      order: 6,
+      desc: '夜間可交換任意 2 位其他玩家的手牌（自己不能看牌內容）。'
+    },
+    insomniac: {
+      id: 'insomniac',
+      name: '失眠者',
+      team: 'villager',
+      teamName: '村民陣營',
+      icon: '🦉',
+      maxCount: 1,
+      order: 7,
+      desc: '在天亮前最後醒來，查看自己最後的身份牌，確認是否被換過。'
+    },
+    hunter: {
+      id: 'hunter',
+      name: '獵人',
+      team: 'villager',
+      teamName: '村民陣營',
+      icon: '🏹',
+      maxCount: 1,
+      order: 99,
+      desc: '若在白天投票中被處決，其投票的目標也同時一同被處決。'
+    },
+    villager: {
+      id: 'villager',
+      name: '村民',
+      team: 'villager',
+      teamName: '村民陣營',
+      icon: '👨‍🌾',
+      maxCount: 3,
+      order: 99,
+      desc: '無夜晚技能，整晚閉眼睡覺，憑藉白天發言與邏輯找出狼人。'
+    }
+  },
+
+  // Calculate recommended balanced roles based on player count N (Requires N + 3 cards)
+  getRecommendedRoles(playerCount) {
+    const N = Math.max(1, playerCount || 1);
+    const config = {
+      werewolf: 0,
+      minion: 0,
+      mason: 0,
+      seer: 0,
+      robber: 0,
+      troublemaker: 0,
+      insomniac: 0,
+      hunter: 0,
+      villager: 0
+    };
+
+    if (N === 1) {
+      // 4 cards (Single Player Test Mode)
+      config.werewolf = 1;
+      config.seer = 1;
+      config.robber = 1;
+      config.villager = 1;
+    } else if (N === 2) {
+      // 5 cards (Two Players Test Mode)
+      config.werewolf = 1;
+      config.seer = 1;
+      config.robber = 1;
+      config.troublemaker = 1;
+      config.villager = 1;
+    } else if (N === 3) {
+      // 6 cards (Classic Standard 3-player ONUW)
+      config.werewolf = 2;
+      config.seer = 1;
+      config.robber = 1;
+      config.troublemaker = 1;
+      config.villager = 1;
+    } else if (N === 4) {
+      // 7 cards
+      config.werewolf = 2;
+      config.seer = 1;
+      config.robber = 1;
+      config.troublemaker = 1;
+      config.insomniac = 1;
+      config.villager = 1;
+    } else if (N === 5) {
+      // 8 cards
+      config.werewolf = 2;
+      config.minion = 1;
+      config.seer = 1;
+      config.robber = 1;
+      config.troublemaker = 1;
+      config.insomniac = 1;
+      config.hunter = 1;
+    } else if (N === 6) {
+      // 9 cards
+      config.werewolf = 2;
+      config.minion = 1;
+      config.mason = 2;
+      config.seer = 1;
+      config.robber = 1;
+      config.troublemaker = 1;
+      config.insomniac = 1;
+    } else if (N === 7) {
+      // 10 cards
+      config.werewolf = 2;
+      config.minion = 1;
+      config.mason = 2;
+      config.seer = 1;
+      config.robber = 1;
+      config.troublemaker = 1;
+      config.insomniac = 1;
+      config.hunter = 1;
+    } else if (N === 8) {
+      // 11 cards
+      config.werewolf = 2;
+      config.minion = 1;
+      config.mason = 2;
+      config.seer = 1;
+      config.robber = 1;
+      config.troublemaker = 1;
+      config.insomniac = 1;
+      config.hunter = 1;
+      config.villager = 1;
+    } else if (N === 9) {
+      // 12 cards
+      config.werewolf = 2;
+      config.minion = 1;
+      config.mason = 2;
+      config.seer = 1;
+      config.robber = 1;
+      config.troublemaker = 1;
+      config.insomniac = 1;
+      config.hunter = 1;
+      config.villager = 2;
+    } else {
+      // >= 10 players
+      config.werewolf = 2;
+      config.minion = 1;
+      config.mason = 2;
+      config.seer = 1;
+      config.robber = 1;
+      config.troublemaker = 1;
+      config.insomniac = 1;
+      config.hunter = 1;
+      config.villager = Math.min(3, Math.max(1, N + 3 - 10));
+    }
+
+    return config;
+  },
+
+  getSelectedRoleTotalCount() {
+    return Object.values(this.state.selectedRoles || {}).reduce((sum, count) => sum + (count || 0), 0);
+  },
+
+  adjustRoleCount(roleId, delta) {
+    if (!this.state.isHost) return;
+    const roleDef = this.ROLES[roleId];
+    if (!roleDef) return;
+
+    const currentCount = this.state.selectedRoles[roleId] || 0;
+    const newCount = Math.max(0, Math.min(roleDef.maxCount, currentCount + delta));
+    if (newCount === currentCount) return;
+
+    this.state.selectedRoles[roleId] = newCount;
+    this.state.isCustomRoles = true; // Mark as custom modified
+
+    if ('vibrate' in navigator) navigator.vibrate(20);
+
+    this.broadcast({
+      type: 'SYNC_ROLES',
+      selectedRoles: this.state.selectedRoles,
+      isCustomRoles: true
+    });
+
+    this.updateRoomUI();
+  },
+
+  applyRecommendedRoles() {
+    if (!this.state.isHost) return;
+    const count = this.state.players.length || 1;
+    this.state.selectedRoles = this.getRecommendedRoles(count);
+    this.state.isCustomRoles = false;
+
+    if ('vibrate' in navigator) navigator.vibrate(30);
+
+    App.showToast(`已套用 ${count} 人局推薦平衡配置！`, 'success');
+
+    this.broadcast({
+      type: 'SYNC_ROLES',
+      selectedRoles: this.state.selectedRoles,
+      isCustomRoles: false
+    });
+
+    this.updateRoomUI();
+  },
 
   init() {
     if (!this.state.myPlayerId) {
@@ -151,6 +412,8 @@ const WerewolfModule = {
       isReady: false,
       joinedAt: Date.now()
     }];
+    this.state.isCustomRoles = false;
+    this.state.selectedRoles = this.getRecommendedRoles(1);
     this.state.messages = [];
 
     App.showToast('正在建立房間...', 'info');
@@ -166,7 +429,9 @@ const WerewolfModule = {
           this.broadcast({
             type: 'SYNC_STATE',
             players: this.state.players,
-            hostId: this.state.myPlayerId
+            hostId: this.state.myPlayerId,
+            selectedRoles: this.state.selectedRoles,
+            isCustomRoles: this.state.isCustomRoles
           });
         } else {
           App.showToast('房間建立失敗，請重試', 'error');
@@ -269,10 +534,15 @@ const WerewolfModule = {
             App.showToast(`${data.player.name} 加入了房間`, 'info');
           }
           if (this.state.isHost) {
+            if (!this.state.isCustomRoles) {
+              this.state.selectedRoles = this.getRecommendedRoles(this.state.players.length);
+            }
             this.broadcast({
               type: 'SYNC_STATE',
               players: this.state.players,
-              hostId: this.state.myPlayerId
+              hostId: this.state.myPlayerId,
+              selectedRoles: this.state.selectedRoles,
+              isCustomRoles: this.state.isCustomRoles
             });
           }
           this.updateRoomUI();
@@ -295,6 +565,22 @@ const WerewolfModule = {
             }
             this.state.players = currentPlayers;
             this.state.isHost = (data.hostId === this.state.myPlayerId);
+            if (data.selectedRoles) {
+              this.state.selectedRoles = data.selectedRoles;
+            }
+            if (data.isCustomRoles !== undefined) {
+              this.state.isCustomRoles = data.isCustomRoles;
+            }
+            this.updateRoomUI();
+          }
+          break;
+
+        case 'SYNC_ROLES':
+          if (data.selectedRoles) {
+            this.state.selectedRoles = data.selectedRoles;
+            if (data.isCustomRoles !== undefined) {
+              this.state.isCustomRoles = data.isCustomRoles;
+            }
             this.updateRoomUI();
           }
           break;
@@ -318,12 +604,28 @@ const WerewolfModule = {
               if (this.state.players[0].id === this.state.myPlayerId) {
                 this.state.isHost = true;
                 App.showToast('原房主已離開，您已成為新房主 👑', 'info');
+                if (!this.state.isCustomRoles) {
+                  this.state.selectedRoles = this.getRecommendedRoles(this.state.players.length);
+                }
                 this.broadcast({
                   type: 'SYNC_STATE',
                   players: this.state.players,
-                  hostId: this.state.myPlayerId
+                  hostId: this.state.myPlayerId,
+                  selectedRoles: this.state.selectedRoles,
+                  isCustomRoles: this.state.isCustomRoles
                 });
               }
+            } else if (this.state.isHost) {
+              if (!this.state.isCustomRoles) {
+                this.state.selectedRoles = this.getRecommendedRoles(this.state.players.length);
+              }
+              this.broadcast({
+                type: 'SYNC_STATE',
+                players: this.state.players,
+                hostId: this.state.myPlayerId,
+                selectedRoles: this.state.selectedRoles,
+                isCustomRoles: this.state.isCustomRoles
+              });
             }
             this.updateRoomUI();
           }
@@ -334,7 +636,9 @@ const WerewolfModule = {
             this.broadcast({
               type: 'SYNC_STATE',
               players: this.state.players,
-              hostId: this.state.myPlayerId
+              hostId: this.state.myPlayerId,
+              selectedRoles: this.state.selectedRoles,
+              isCustomRoles: this.state.isCustomRoles
             });
           }
           break;
@@ -716,6 +1020,11 @@ const WerewolfModule = {
           </div>
         </div>
 
+        <!-- Role Pool Configuration Section -->
+        <div id="role-pool-container" class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+          ${this.renderRolePoolSection()}
+        </div>
+
         <!-- Host Broadcast Control Area (Dynamically synced) -->
         <div id="room-host-control-area">
           ${this.renderHostControls()}
@@ -824,6 +1133,137 @@ const WerewolfModule = {
     `;
   },
 
+  renderRolePoolSection() {
+    const playerCount = this.state.players.length || 1;
+    const targetCards = playerCount + 3;
+    const totalSelected = this.getSelectedRoleTotalCount();
+    const isMatched = totalSelected === targetCards;
+    const isHost = this.state.isHost;
+
+    let statusBadge = '';
+    if (isMatched) {
+      statusBadge = `
+        <span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-bold text-[10px]">
+          <i data-lucide="check-circle" class="w-3 h-3"></i>
+          <span>${totalSelected} / ${targetCards} 張 (吻合)</span>
+        </span>
+      `;
+    } else if (totalSelected < targetCards) {
+      statusBadge = `
+        <span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 font-bold text-[10px]">
+          <i data-lucide="alert-circle" class="w-3 h-3"></i>
+          <span>尚缺 ${targetCards - totalSelected} 張 (${totalSelected}/${targetCards})</span>
+        </span>
+      `;
+    } else {
+      statusBadge = `
+        <span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 font-bold text-[10px]">
+          <i data-lucide="alert-triangle" class="w-3 h-3"></i>
+          <span>超出 ${totalSelected - targetCards} 張 (${totalSelected}/${targetCards})</span>
+        </span>
+      `;
+    }
+
+    return `
+      <!-- Role Pool Section Header -->
+      <div class="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+        <div class="flex items-center space-x-1.5">
+          <span class="text-base">🎭</span>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+            角色池配置
+          </h2>
+        </div>
+        <div>${statusBadge}</div>
+      </div>
+
+      <!-- Explanatory & Adapt Action Bar -->
+      <div class="flex items-center justify-between text-[11px] bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-2xl border border-slate-100 dark:border-slate-800">
+        <span class="text-slate-600 dark:text-slate-300">
+          玩家 <strong>${playerCount}</strong> 人 ＋ <strong>3</strong> 底牌 ＝ 需選 <strong class="text-indigo-600 dark:text-indigo-400 font-bold">${targetCards}</strong> 張
+        </span>
+        ${isHost ? `
+          <button onclick="WerewolfModule.applyRecommendedRoles()" class="tap-scale px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-bold text-[10px] border border-indigo-200 dark:border-indigo-800 flex items-center space-x-1 shadow-sm">
+            <i data-lucide="sparkles" class="w-3 h-3"></i>
+            <span>一鍵適配人數</span>
+          </button>
+        ` : `
+          <span class="text-[10px] text-slate-400">房主可調整</span>
+        `}
+      </div>
+
+      <!-- Role Items List -->
+      <div class="space-y-2 pt-1">
+        ${Object.values(this.ROLES).map(role => {
+          const count = (this.state.selectedRoles && this.state.selectedRoles[role.id]) || 0;
+          const isSelected = count > 0;
+          const isWolfTeam = role.team === 'werewolf';
+
+          return `
+            <div class="p-2.5 rounded-2xl transition-all border ${
+              isSelected 
+                ? (isWolfTeam 
+                    ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40 shadow-sm' 
+                    : 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/40 shadow-sm')
+                : 'bg-slate-50/50 dark:bg-slate-900/30 border-slate-100 dark:border-slate-800 opacity-60'
+            }">
+              <div class="flex items-center justify-between">
+                <!-- Left: Icon, Name & Team Badge -->
+                <div class="flex items-center space-x-2.5">
+                  <span class="text-2xl shrink-0">${role.icon}</span>
+                  <div>
+                    <div class="flex items-center space-x-1.5">
+                      <span class="text-xs font-bold text-slate-900 dark:text-white">${role.name}</span>
+                      <span class="text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                        isWolfTeam 
+                          ? 'bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400' 
+                          : 'bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400'
+                      }">
+                        ${role.teamName}
+                      </span>
+                      <span class="text-[9px] text-slate-400">上限 ${role.maxCount}</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">${role.desc}</p>
+                  </div>
+                </div>
+
+                <!-- Right: Controls (if host) or Count display (if member) -->
+                <div class="shrink-0 ml-2">
+                  ${isHost ? `
+                    <div class="flex items-center space-x-1 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-0.5 shadow-sm">
+                      <button 
+                        onclick="WerewolfModule.adjustRoleCount('${role.id}', -1)"
+                        class="tap-scale h-7 w-7 rounded-lg flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:pointer-events-none"
+                        ${count <= 0 ? 'disabled' : ''}
+                      >
+                        <i data-lucide="minus" class="w-3.5 h-3.5"></i>
+                      </button>
+                      <span class="w-6 text-center text-xs font-black text-slate-900 dark:text-white">${count}</span>
+                      <button 
+                        onclick="WerewolfModule.adjustRoleCount('${role.id}', 1)"
+                        class="tap-scale h-7 w-7 rounded-lg flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:pointer-events-none"
+                        ${count >= role.maxCount ? 'disabled' : ''}
+                      >
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                      </button>
+                    </div>
+                  ` : `
+                    <span class="inline-block px-2.5 py-1 rounded-xl text-xs font-black ${
+                      count > 0 
+                        ? 'bg-indigo-600 text-white shadow-sm' 
+                        : 'bg-slate-200 dark:bg-slate-700 text-slate-400'
+                    }">
+                      x ${count}
+                    </span>
+                  `}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  },
+
   renderHostControls() {
     if (!this.state.isHost) return '';
     return `
@@ -872,7 +1312,13 @@ const WerewolfModule = {
       badgeEl.textContent = this.state.isHost ? '👑 您是房主' : '👤 房間成員';
     }
 
-    // 6. Update host controls area (e.g. connection test button)
+    // 6. Update role pool container
+    const rolePoolEl = document.getElementById('role-pool-container');
+    if (rolePoolEl) {
+      rolePoolEl.innerHTML = this.renderRolePoolSection();
+    }
+
+    // 7. Update host controls area (e.g. connection test button)
     const hostControlEl = document.getElementById('room-host-control-area');
     if (hostControlEl) {
       hostControlEl.innerHTML = this.renderHostControls();
