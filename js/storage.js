@@ -48,6 +48,20 @@ const StorageManager = {
     if (!this.get('installed_modules')) {
       this.set('installed_modules', []);
     }
+  },
+
+  // Clear all local application storage and restore to original default
+  clearAll() {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith(this.PREFIX) || key.startsWith('patrickapp:') || key.startsWith('lifehub:'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    this.init();
+    window.dispatchEvent(new CustomEvent('myapp:data-cleared'));
   }
 };
 

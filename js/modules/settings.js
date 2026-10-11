@@ -1,6 +1,6 @@
 /**
  * My App - Settings Module
- * Nickname management (no avatar), Theme selection, Mobile installation guide
+ * Nickname management (no avatar), Theme selection, Mobile installation guide, Reset button
  */
 const SettingsModule = {
   id: 'settings',
@@ -12,7 +12,7 @@ const SettingsModule = {
     const currentName = settings.userName || 'default';
 
     return `
-      <div class="space-y-5 fade-in pb-16">
+      <div class="space-y-5 fade-in pb-20">
         <!-- Header -->
         <div class="pt-2">
           <h1 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white">系統設定</h1>
@@ -23,7 +23,7 @@ const SettingsModule = {
         <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
           <div class="flex items-center space-x-2">
             <i data-lucide="user" class="w-4 h-4 text-indigo-500"></i>
-            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">自訂應用名稱 / 稱呼</h2>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">自訂應用名稱 / 暱稱</h2>
           </div>
 
           <div>
@@ -47,7 +47,7 @@ const SettingsModule = {
               </button>
             </div>
             <p class="text-[11px] text-slate-400 mt-1.5">
-              儲存後，畫面最上方的頂部標題與首頁問候語將同步更新。
+              儲存後，頂部標題將顯示為「暱稱's App」，首頁問候語亦會同步更新。
             </p>
           </div>
         </div>
@@ -123,11 +123,17 @@ const SettingsModule = {
           </div>
         </div>
 
-        <!-- About & Architecture Note -->
-        <div class="p-4 rounded-3xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 text-center space-y-1">
-          <p class="text-xs font-bold text-indigo-900 dark:text-indigo-200">My App v1.0.0</p>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400">
-            專屬個人的模組化微應用中心 · 準備從零擴充自訂模組
+        <!-- Reset Button Section at the Very Bottom -->
+        <div class="pt-2">
+          <button 
+            onclick="SettingsModule.confirmReset()" 
+            class="tap-scale w-full py-3.5 px-4 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 font-bold text-xs flex items-center justify-center space-x-2 hover:bg-red-100/60 dark:hover:bg-red-950/50 transition shadow-sm"
+          >
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            <span>重置</span>
+          </button>
+          <p class="text-[11px] text-slate-400 dark:text-slate-500 text-center mt-2 leading-relaxed">
+            重置將會清除本機所有相關檔案與自訂內容，回到最原始的狀態。
           </p>
         </div>
       </div>
@@ -145,7 +151,7 @@ const SettingsModule = {
     const settings = StorageManager.get('settings', {});
     settings.userName = newName;
     StorageManager.set('settings', settings);
-    App.updateHeaderTitle();
+    App.updateHeader();
     App.showToast('名稱已更新！', 'success');
   },
 
@@ -156,6 +162,14 @@ const SettingsModule = {
     App.applyTheme();
     App.render();
     App.showToast(`已切換主題：${theme === 'system' ? '跟隨系統' : theme === 'dark' ? '深色模式' : '明亮模式'}`, 'info');
+  },
+
+  confirmReset() {
+    if (confirm('確定要重置嗎？\n\n這將會刪除本機相關所有檔案與自訂設定，回到最原始的狀態！')) {
+      StorageManager.clearAll();
+      App.showToast('已重置為原始狀態', 'info');
+      setTimeout(() => location.reload(), 400);
+    }
   }
 };
 

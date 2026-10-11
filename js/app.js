@@ -27,6 +27,9 @@ const App = {
     this.updateHeader();
     this.registerServiceWorker();
 
+    // Live update header date & time every 30 seconds
+    setInterval(() => this.updateHeader(), 30000);
+
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
       const settings = StorageManager.get('settings', {});
       if (settings.theme === 'system') {
@@ -40,19 +43,33 @@ const App = {
       this.updateHeader();
       this.updateBadges();
     });
+
+    window.addEventListener('myapp:data-cleared', () => {
+      this.updateHeader();
+      this.render();
+    });
   },
 
   updateHeader() {
     const settings = StorageManager.get('settings', { userName: 'default' });
+    const userName = settings.userName || 'default';
+    
+    // Top app title: "暱稱's App"
     const titleEl = document.getElementById('app-header-title');
     if (titleEl) {
-      titleEl.textContent = settings.userName || 'default';
+      titleEl.textContent = `${userName}'s App`;
     }
 
+    // Top date and time: Year Month Day Hour:Minute
     const dateEl = document.getElementById('app-header-date');
     if (dateEl) {
-      const dateOptions = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
-      dateEl.textContent = new Date().toLocaleDateString('zh-TW', dateOptions);
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const day = now.getDate();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      dateEl.textContent = `${year}年${month}月${day}日 ${hours}:${minutes}`;
     }
   },
 
