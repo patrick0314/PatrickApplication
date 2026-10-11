@@ -3181,16 +3181,6 @@ const WerewolfModule = {
           </button>
         </div>
 
-        <!-- Deduction Tips -->
-        <div class="rounded-2xl p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/40 space-y-1.5">
-          <p class="text-xs font-bold text-indigo-700 dark:text-indigo-300">💡 辯論提示與技巧：</p>
-          <ul class="text-[11px] text-slate-600 dark:text-slate-400 space-y-1 leading-relaxed">
-            <li>• 點選自己的頭像或按鈕，隨時向全體公開宣稱你的身份。</li>
-            <li>• 預言家可主動跳出告知查驗結果，建立邏輯基石。</li>
-            <li>• 強盜與搗蛋鬼可選擇何時誠實說出調換對象。</li>
-            <li>• 狼人可偽裝成好人製造混亂，留意發言是否有時間矛盾！</li>
-          </ul>
-        </div>
 
         <!-- Quick Reactions in Discussion -->
         <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-3 border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
