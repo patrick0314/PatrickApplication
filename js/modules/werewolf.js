@@ -666,7 +666,17 @@ const WerewolfModule = {
                 isCustomRoles: this.state.isCustomRoles
               });
             }
-            this.updateRoomUI();
+            if (this.state.gameData?.endDayVotes) {
+              delete this.state.gameData.endDayVotes[data.playerId];
+              if (this.state.isHost && this.state.gamePhase === 'day') {
+                this.checkAllVotedEndDay();
+              }
+            }
+            if (this.state.gamePhase === 'day') {
+              this.renderView();
+            } else {
+              this.updateRoomUI();
+            }
           }
           break;
 
@@ -768,6 +778,21 @@ const WerewolfModule = {
         case 'DAY_STARTED':
           if (!this.state.isHost) {
             this.handleDayStarted(data);
+          }
+          break;
+
+        case 'TOGGLE_END_DAY':
+          if (data.fromId === this.state.myPlayerId) return;
+          if (!this.state.gameData) this.state.gameData = {};
+          if (!this.state.gameData.endDayVotes) this.state.gameData.endDayVotes = {};
+          this.state.gameData.endDayVotes[data.playerId] = !!data.hasVoted;
+
+          if (this.state.isHost) {
+            this.checkAllVotedEndDay();
+          }
+
+          if (this.state.gamePhase === 'day') {
+            this.renderView();
           }
           break;
 
@@ -2059,6 +2084,9 @@ const WerewolfModule = {
     const playerCount = this.state.players.length || 1;
     const duration = (playerCount + 3) * 60; // 人數 + 3 分鐘
 
+    if (!this.state.gameData) this.state.gameData = {};
+    this.state.gameData.endDayVotes = {};
+
     this.broadcast({
       type: 'DAY_STARTED',
       duration: duration
@@ -2072,6 +2100,7 @@ const WerewolfModule = {
     this.state.gamePhase = 'day';
     if (!this.state.gameData) this.state.gameData = {};
     this.state.gameData.phase = 'day';
+    this.state.gameData.endDayVotes = {};
     const defaultDuration = ((this.state.players.length || 1) + 3) * 60;
     this.state.gameData.timerSeconds = data.duration || defaultDuration;
 
@@ -2100,10 +2129,42 @@ const WerewolfModule = {
     }, 1000);
   },
 
-  hostSkipDayDiscussion() {
-    if (!this.state.isHost) return;
-    if (confirm('確定要提早結束白日討論，直接進入投票處決階段嗎？')) {
-      this.startVotingPhase();
+  toggleVoteEndDay() {
+    if (!this.state.gameData || this.state.gamePhase !== 'day') return;
+    if (!this.state.gameData.endDayVotes) this.state.gameData.endDayVotes = {};
+
+    const current = !!this.state.gameData.endDayVotes[this.state.myPlayerId];
+    const next = !current;
+    this.state.gameData.endDayVotes[this.state.myPlayerId] = next;
+
+    if ('vibrate' in navigator) navigator.vibrate(25);
+
+    this.broadcast({
+      type: 'TOGGLE_END_DAY',
+      playerId: this.state.myPlayerId,
+      hasVoted: next
+    });
+
+    if (this.state.isHost) {
+      this.checkAllVotedEndDay();
+    }
+
+    this.renderView();
+    App.showToast(next ? '已投同意提早結束討論 🗳️' : '已取消同意提早結束', 'info');
+  },
+
+  checkAllVotedEndDay() {
+    if (!this.state.isHost || !this.state.gameData || this.state.gamePhase !== 'day') return;
+    const votes = this.state.gameData.endDayVotes || {};
+    const total = this.state.players.length;
+    const votedCount = this.state.players.filter(p => !!votes[p.id]).length;
+    if (total > 0 && votedCount >= total) {
+      App.showToast('全體玩家皆同意提早結束討論！即將進入投票 🗳️', 'success');
+      setTimeout(() => {
+        if (this.state.gamePhase === 'day') {
+          this.startVotingPhase();
+        }
+      }, 700);
     }
   },
 
@@ -2880,6 +2941,12 @@ const WerewolfModule = {
     const timerStr = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     const isHost = this.state.isHost;
 
+    const endDayVotes = this.state.gameData?.endDayVotes || {};
+    const totalPlayers = this.state.players.length || 1;
+    const votedCount = this.state.players.filter(p => !!endDayVotes[p.id]).length;
+    const hasMyVoted = !!endDayVotes[this.state.myPlayerId];
+    const allVoted = (totalPlayers > 0 && votedCount >= totalPlayers);
+
     const now = Date.now();
     const elapsed = now - (this.state.lastReactionTime || 0);
     const isCoolingDown = elapsed < 10000;
@@ -2915,29 +2982,84 @@ const WerewolfModule = {
           </p>
         </div>
 
-        <!-- Living Players Grid -->
+        <!-- Living Players Grid with End Day Vote status -->
         <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 flex items-center space-x-1">
               <i data-lucide="users" class="w-4 h-4 text-indigo-500"></i>
-              <span>場上存活玩家 (${this.state.players.length})</span>
+              <span>場上玩家 (${this.state.players.length})</span>
             </span>
-            <span class="text-[10px] font-bold text-emerald-500">全部在場</span>
+            <span class="text-[10px] font-bold ${allVoted ? 'text-emerald-500' : 'text-amber-500'}">
+              同意提早投票：${votedCount} / ${totalPlayers} 人
+            </span>
           </div>
 
           <div class="grid grid-cols-2 gap-2">
-            ${this.state.players.map(p => `
-              <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex items-center space-x-2.5">
-                <div class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                  ${p.name.charAt(0).toUpperCase()}
+            ${this.state.players.map(p => {
+              const isVoted = !!endDayVotes[p.id];
+              const isMe = (p.id === this.state.myPlayerId);
+              return `
+                <div class="p-3 rounded-2xl ${
+                  isVoted 
+                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 shadow-sm' 
+                    : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800'
+                } border flex items-center justify-between transition-all">
+                  <div class="flex items-center space-x-2 truncate">
+                    <div class="w-8 h-8 rounded-xl ${isVoted ? 'bg-emerald-600' : 'bg-indigo-600'} text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
+                      ${p.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div class="truncate">
+                      <div class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">${p.name} ${isMe ? '(我)' : ''}</div>
+                      <div class="text-[10px] ${isVoted ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}">
+                        ${isVoted ? '✓ 同意中止' : '辯論中...'}
+                      </div>
+                    </div>
+                  </div>
+                  ${isVoted ? `
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse ml-1"></span>
+                  ` : ''}
                 </div>
-                <div class="truncate">
-                  <div class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">${p.name}</div>
-                  <div class="text-[10px] text-slate-400">${p.id === this.state.myPlayerId ? '你本人' : '辯論發言中'}</div>
-                </div>
-              </div>
-            `).join('')}
+              `;
+            }).join('')}
           </div>
+        </div>
+
+        <!-- End Discussion Early Voting Action Card (Democratic) -->
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <i data-lucide="vote" class="w-4 h-4 text-amber-500"></i>
+              <span class="text-xs font-bold text-slate-800 dark:text-slate-200">提早中止討論投票</span>
+            </div>
+            <span class="text-xs font-black ${allVoted ? 'text-emerald-500' : 'text-amber-500'}">
+              ${votedCount} / ${totalPlayers} 人同意
+            </span>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all duration-300" style="width: ${Math.round((votedCount / totalPlayers) * 100)}%"></div>
+          </div>
+
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+            全體玩家皆點擊同意中止討論後，將立即進入投票處決環節。若倒數時間結束亦會自動進入投票。
+          </p>
+
+          <button 
+            onclick="WerewolfModule.toggleVoteEndDay()" 
+            class="tap-scale w-full py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center space-x-2 shadow-md transition-all ${
+              hasMyVoted 
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 shadow-emerald-500/10' 
+                : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-amber-500/25'
+            }"
+          >
+            <i data-lucide="${hasMyVoted ? 'check-circle' : 'stop-circle'}" class="w-4 h-4"></i>
+            <span>${
+              hasMyVoted 
+                ? `已同意中止 (點擊取消) · 等待其他人 (${votedCount}/${totalPlayers})` 
+                : `投票同意中止討論 (${votedCount}/${totalPlayers})`
+            }</span>
+          </button>
         </div>
 
         <!-- Deduction Tips -->
@@ -2965,19 +3087,6 @@ const WerewolfModule = {
             <button onclick="WerewolfModule.sendReaction('💀')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">💀</button>
           </div>
         </div>
-
-        <!-- Host Skip to Vote Button -->
-        ${isHost ? `
-          <div>
-            <button 
-              onclick="WerewolfModule.hostSkipDayDiscussion()" 
-              class="tap-scale w-full py-4 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-black text-sm shadow-xl shadow-red-600/25 flex items-center justify-center space-x-2"
-            >
-              <i data-lucide="vote" class="w-5 h-5"></i>
-              <span>⚡ 提早結束討論，直接進入投票</span>
-            </button>
-          </div>
-        ` : ''}
       </div>
     `;
   },
