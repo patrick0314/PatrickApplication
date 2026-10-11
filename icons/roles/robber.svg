@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs>
+    <linearGradient id="ninjaBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#042f2e"/>
+      <stop offset="50%" stop-color="#115e59"/>
+      <stop offset="100%" stop-color="#022c22"/>
+    </linearGradient>
+    <linearGradient id="metalPlate" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#cbd5e1"/>
+      <stop offset="50%" stop-color="#94a3b8"/>
+      <stop offset="100%" stop-color="#64748b"/>
+    </linearGradient>
+  </defs>
+  <!-- Card base -->
+  <rect x="2" y="2" width="76" height="76" rx="16" fill="url(#ninjaBg)" stroke="#2dd4bf" stroke-width="2.5"/>
+  <!-- Ninja Hood -->
+  <path d="M22 28 Q40 14 58 28 L62 58 Q40 68 18 58 Z" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+  <!-- Forehead Protector Band -->
+  <path d="M20 28 Q40 24 60 28 L61 36 Q40 32 19 36 Z" fill="#1e293b"/>
+  <!-- Metal Plate on Headband -->
+  <rect x="28" y="26" width="24" height="9" rx="2" fill="url(#metalPlate)" stroke="#475569" stroke-width="1"/>
+  <circle cx="30" cy="30.5" r="1" fill="#1e293b"/>
+  <circle cx="50" cy="30.5" r="1" fill="#1e293b"/>
+  <!-- Ninja Engraving / Shuriken symbol on plate -->
+  <circle cx="40" cy="30.5" r="2" fill="#0f172a"/>
+  <!-- Eye Opening Mask Slot -->
+  <path d="M24 38 Q40 37 56 38 L54 48 Q40 49 26 48 Z" fill="#fed7aa"/>
+  <!-- Sharp Piercing Ninja Eyes -->
+  <polygon points="28,41 38,43 32,45" fill="#0f172a"/>
+  <circle cx="34" cy="43" r="1" fill="#ffffff"/>
+  <polygon points="52,41 42,43 48,45" fill="#0f172a"/>
+  <circle cx="46" cy="43" r="1" fill="#ffffff"/>
+  <!-- Mask Cloth Covering Mouth -->
+  <path d="M22 47 Q40 48 58 47 L60 62 Q40 68 20 62 Z" fill="#020617"/>
+  <!-- Fold detail on mask -->
+  <path d="M30 54 Q40 57 50 54" fill="none" stroke="#334155" stroke-width="1.5"/>
+  <!-- Crossed Ninja Daggers / Shuriken in background -->
+  <path d="M12 62 L20 54 L16 50 Z" fill="#94a3b8"/>
+  <path d="M68 62 L60 54 L64 50 Z" fill="#94a3b8"/>
+</svg>

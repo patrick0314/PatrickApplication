@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs>
+    <linearGradient id="owlBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#164e63"/>
+    </linearGradient>
+  </defs>
+  <!-- Card base -->
+  <rect x="2" y="2" width="76" height="76" rx="16" fill="url(#owlBg)" stroke="#38bdf8" stroke-width="2.5"/>
+  <!-- Pocket Watch / Clock Dial in background -->
+  <circle cx="52" cy="46" r="18" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
+  <!-- Clock hands -->
+  <line x1="52" y1="46" x2="52" y2="34" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="52" y1="46" x2="62" y2="46" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="52" cy="46" r="2" fill="#f59e0b"/>
+  <!-- Owl Ear Tufts -->
+  <polygon points="20,16 30,28 16,30" fill="#334155"/>
+  <polygon points="46,16 50,30 36,28" fill="#334155"/>
+  <!-- Owl Head & Body -->
+  <ellipse cx="33" cy="38" rx="16" ry="18" fill="#475569" stroke="#94a3b8" stroke-width="1.5"/>
+  <ellipse cx="33" cy="48" rx="12" ry="14" fill="#cbd5e1"/>
+  <!-- Giant Awake Insomniac Eyes -->
+  <circle cx="27" cy="34" r="8" fill="#fef08a" stroke="#ca8a04" stroke-width="1.5"/>
+  <circle cx="27" cy="34" r="4.5" fill="#0f172a"/>
+  <circle cx="28.5" cy="32.5" r="1.8" fill="#ffffff"/>
+  <!-- Bloodshot / Vigilant eye rings -->
+  <circle cx="27" cy="34" r="7" fill="none" stroke="#ef4444" stroke-width="0.8" opacity="0.6"/>
+
+  <circle cx="39" cy="34" r="8" fill="#fef08a" stroke="#ca8a04" stroke-width="1.5"/>
+  <circle cx="39" cy="34" r="4.5" fill="#0f172a"/>
+  <circle cx="40.5" cy="32.5" r="1.8" fill="#ffffff"/>
+  <circle cx="39" cy="34" r="7" fill="none" stroke="#ef4444" stroke-width="0.8" opacity="0.6"/>
+
+  <!-- Owl Beak -->
+  <polygon points="31,40 35,40 33,45" fill="#f59e0b"/>
+  <!-- Crescent Moon in night corner -->
+  <path d="M16 12 A8 8 0 1 0 22 22 A6 6 0 1 1 16 12 Z" fill="#38bdf8"/>
+</svg>

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs>
+    <linearGradient id="hunterBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#064e3b"/>
+      <stop offset="50%" stop-color="#047857"/>
+      <stop offset="100%" stop-color="#022c22"/>
+    </linearGradient>
+    <linearGradient id="bowWood" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d97706"/>
+      <stop offset="50%" stop-color="#b45309"/>
+      <stop offset="100%" stop-color="#78350f"/>
+    </linearGradient>
+  </defs>
+  <!-- Card base -->
+  <rect x="2" y="2" width="76" height="76" rx="16" fill="url(#hunterBg)" stroke="#34d399" stroke-width="2.5"/>
+  <!-- Target Crosshair Reticle in background -->
+  <circle cx="40" cy="40" r="26" fill="none" stroke="#a7f3d0" stroke-width="1.2" stroke-dasharray="4 2" opacity="0.4"/>
+  <circle cx="40" cy="40" r="14" fill="none" stroke="#a7f3d0" stroke-width="1.2" opacity="0.4"/>
+  <line x1="40" y1="10" x2="40" y2="70" stroke="#a7f3d0" stroke-width="1" opacity="0.3"/>
+  <line x1="10" y1="40" x2="70" y2="40" stroke="#a7f3d0" stroke-width="1" opacity="0.3"/>
+  <!-- Hunting Bow (Recurve) -->
+  <path d="M22 16 Q10 40 22 64 Q32 40 22 16 Z" fill="url(#bowWood)"/>
+  <!-- Bowstring -->
+  <line x1="22" y1="17" x2="40" y2="40" stroke="#ffffff" stroke-width="1.5"/>
+  <line x1="40" y1="40" x2="22" y2="63" stroke="#ffffff" stroke-width="1.5"/>
+  <!-- Arrow Shaft -->
+  <line x1="18" y1="40" x2="62" y2="40" stroke="#cbd5e1" stroke-width="2.5"/>
+  <!-- Arrow Head (Broadhead) -->
+  <polygon points="66,40 54,34 56,40 54,46" fill="#f8fafc" stroke="#64748b" stroke-width="1"/>
+  <!-- Arrow Feathers (Fletching) -->
+  <polygon points="18,40 26,34 22,40 26,46" fill="#ef4444"/>
+  <polygon points="26,34 32,34 27,40" fill="#ffffff"/>
+  <polygon points="26,46 32,46 27,40" fill="#ffffff"/>
+</svg>

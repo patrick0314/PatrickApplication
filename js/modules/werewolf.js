@@ -56,6 +56,7 @@ const WerewolfModule = {
       team: 'werewolf',
       teamName: '狼人陣營',
       icon: '🐺',
+      image: 'icons/roles/werewolf.svg',
       minCount: 1, // 狼人下限為 1
       maxCount: 2,
       order: 1,
@@ -67,6 +68,7 @@ const WerewolfModule = {
       team: 'werewolf',
       teamName: '狼人陣營',
       icon: '🦊', // 狐狸造型
+      image: 'icons/roles/minion.svg',
       minCount: 0,
       maxCount: 1,
       order: 2,
@@ -78,6 +80,7 @@ const WerewolfModule = {
       team: 'villager',
       teamName: '村民陣營',
       icon: '👮', // 警察造型
+      image: 'icons/roles/mason.svg',
       minCount: 0,
       maxCount: 2,
       order: 3,
@@ -89,6 +92,7 @@ const WerewolfModule = {
       team: 'villager',
       teamName: '村民陣營',
       icon: '🔮',
+      image: 'icons/roles/seer.svg',
       minCount: 0,
       maxCount: 1,
       order: 4,
@@ -100,6 +104,7 @@ const WerewolfModule = {
       team: 'villager',
       teamName: '村民陣營',
       icon: '🥷', // 忍者造型
+      image: 'icons/roles/robber.svg',
       minCount: 0,
       maxCount: 1,
       order: 5,
@@ -111,6 +116,7 @@ const WerewolfModule = {
       team: 'villager',
       teamName: '村民陣營',
       icon: '🎭',
+      image: 'icons/roles/troublemaker.svg',
       minCount: 0,
       maxCount: 1,
       order: 6,
@@ -122,6 +128,7 @@ const WerewolfModule = {
       team: 'villager',
       teamName: '村民陣營',
       icon: '🍺',
+      image: 'icons/roles/drunk.svg',
       minCount: 0,
       maxCount: 1,
       order: 7,
@@ -133,6 +140,7 @@ const WerewolfModule = {
       team: 'villager',
       teamName: '村民陣營',
       icon: '🦉',
+      image: 'icons/roles/insomniac.svg',
       minCount: 0,
       maxCount: 1,
       order: 8,
@@ -144,6 +152,7 @@ const WerewolfModule = {
       team: 'villager',
       teamName: '村民陣營',
       icon: '🏹',
+      image: 'icons/roles/hunter.svg',
       maxCount: 1,
       order: 99,
       desc: '若在白天投票中被處決，其投票的目標也同時一同被處決。'
@@ -154,6 +163,7 @@ const WerewolfModule = {
       team: 'villager',
       teamName: '村民陣營',
       icon: '👨‍🌾',
+      image: 'icons/roles/villager.svg',
       maxCount: 3,
       order: 99,
       desc: '無夜晚技能，整晚閉眼睡覺，憑藉白天發言與邏輯找出狼人。'
@@ -717,9 +727,27 @@ const WerewolfModule = {
               currentCards: { ...data.initialCards },
               nightOrder: data.nightOrder,
               myInitialRole: data.initialCards[this.state.myPlayerId],
-              myCurrentRole: data.initialCards[this.state.myPlayerId]
+              myCurrentRole: data.initialCards[this.state.myPlayerId],
+              confirmedCount: 0,
+              totalCount: data.totalPlayers || this.state.players.length || 1,
+              cardFlipped: false,
+              hasConfirmedCard: false
             };
-            this.startDealingPhase(data.dealDuration || 10);
+            this.startDealingPhase();
+          }
+          break;
+
+        case 'PLAYER_CONFIRMED_CARD':
+          if (this.state.isHost) {
+            this.handlePlayerConfirmedCard(data.playerId);
+          }
+          break;
+
+        case 'SYNC_CONFIRMED_COUNT':
+          if (!this.state.isHost && this.state.gameData) {
+            this.state.gameData.confirmedCount = data.confirmedCount;
+            this.state.gameData.totalCount = data.totalCount;
+            this.updateDealPhaseUI(data.confirmedCount, data.totalCount);
           }
           break;
 
@@ -1156,21 +1184,29 @@ const WerewolfModule = {
     const playerCount = this.state.players.length || 1;
     const targetCards = playerCount + 3;
     const selectedCount = this.getSelectedRoleTotalCount();
-    const canStartGame = (selectedCount === targetCards);
+    const isCardCountValid = (selectedCount === targetCards);
+    const unreadyPlayers = this.state.players.filter(p => !p.isReady && !p.isHost);
+    const allOthersReady = (playerCount === 1) || (unreadyPlayers.length === 0);
+    const canStartGame = isCardCountValid && allOthersReady;
 
     return `
       ${isHost ? `
         <button 
           onclick="WerewolfModule.hostStartGame()"
+          ${!canStartGame ? 'disabled' : ''}
           class="tap-scale w-full py-4 rounded-2xl font-black text-sm shadow-xl flex items-center justify-center space-x-2 transition-all ${
             canStartGame 
               ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-indigo-600/30' 
-              : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-300 dark:border-slate-700 cursor-not-allowed'
+              : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-300 dark:border-slate-700 opacity-70 cursor-not-allowed'
           }"
         >
           <i data-lucide="play" class="w-5 h-5"></i>
           <span>🚀 開始遊戲 (發牌)</span>
-          ${!canStartGame ? `<span class="text-[10px] font-normal opacity-80">(需選 ${targetCards} 張，目前 ${selectedCount} 張)</span>` : ''}
+          ${!isCardCountValid 
+            ? `<span class="text-[10px] font-normal opacity-85">(需選 ${targetCards} 張，目前 ${selectedCount} 張)</span>` 
+            : (!allOthersReady 
+                ? `<span class="text-[10px] font-normal opacity-85">(⏳ 等待玩家準備 ${this.state.players.filter(p => p.isReady).length}/${playerCount})</span>` 
+                : '')}
         </button>
       ` : ''}
 
@@ -1287,7 +1323,7 @@ const WerewolfModule = {
       <!-- Role Pool Section Header -->
       <div class="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
         <div class="flex items-center space-x-1.5">
-          <span class="text-base">🎭</span>
+          <img src="icons/roles/card_icon.svg" class="w-5 h-5 object-contain shrink-0" alt="卡牌">
           <h2 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
             角色池配置
           </h2>
@@ -1328,7 +1364,7 @@ const WerewolfModule = {
               <div class="flex items-center justify-between">
                 <!-- Left: Icon, Name & Team Badge -->
                 <div class="flex items-center space-x-2.5">
-                  <span class="text-2xl shrink-0">${role.icon}</span>
+                  <img src="${role.image}" alt="${role.name}" class="w-10 h-10 rounded-xl object-contain shrink-0 shadow-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-0.5">
                   <div>
                     <div class="flex items-center space-x-1.5">
                       <span class="text-xs font-bold text-slate-900 dark:text-white">${role.name}</span>
@@ -1474,7 +1510,7 @@ const WerewolfModule = {
   },
 
   getRoleDef(roleId) {
-    return this.ROLES[roleId] || { id: roleId, name: roleId || '未知', icon: '❓', team: 'villager', teamName: '村民陣營', desc: '' };
+    return this.ROLES[roleId] || { id: roleId, name: roleId || '未知', icon: '❓', image: 'icons/roles/card_icon.svg', team: 'villager', teamName: '村民陣營', desc: '' };
   },
 
   // 1. Host Starts the Game
@@ -1500,11 +1536,10 @@ const WerewolfModule = {
 
     // Check if other players are ready
     if (playerCount >= 2) {
-      const unreadyPlayers = this.state.players.filter(p => !p.isReady && p.id !== this.state.myPlayerId);
+      const unreadyPlayers = this.state.players.filter(p => !p.isReady && !p.isHost);
       if (unreadyPlayers.length > 0) {
-        if (!confirm(`尚有 ${unreadyPlayers.length} 位玩家尚未準備（${unreadyPlayers.map(p => p.name).join('、')}），確定要直接發牌開始嗎？`)) {
-          return;
-        }
+        App.showToast(`尚有玩家尚未準備：${unreadyPlayers.map(p => p.name).join('、')}`, 'warning');
+        return;
       }
     }
 
@@ -1531,8 +1566,10 @@ const WerewolfModule = {
     const centerCards = deck.slice(playerCount, playerCount + 3);
     const initialCenterCards = [...centerCards];
 
+    // 僅呼叫當前場上（玩家手中）有的角色輪次，不呼叫底牌角色
+    const playerRolesOnField = new Set(Object.values(initialCards));
     const ORDERED_NIGHT_ROLES = ['werewolf', 'minion', 'mason', 'seer', 'robber', 'troublemaker', 'drunk', 'insomniac'];
-    const nightOrder = ORDERED_NIGHT_ROLES.filter(r => (this.state.selectedRoles[r] || 0) > 0);
+    const nightOrder = ORDERED_NIGHT_ROLES.filter(r => playerRolesOnField.has(r));
 
     this.state.gameData = {
       initialCards: initialCards,
@@ -1546,7 +1583,11 @@ const WerewolfModule = {
       votes: {},
       myInitialRole: initialCards[this.state.myPlayerId],
       myCurrentRole: initialCards[this.state.myPlayerId],
-      cardFlipped: false
+      cardFlipped: false,
+      hasConfirmedCard: false,
+      confirmedPlayers: {},
+      confirmedCount: 0,
+      totalCount: playerCount
     };
 
     if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
@@ -1555,69 +1596,146 @@ const WerewolfModule = {
       type: 'GAME_STARTED',
       initialCards: initialCards,
       nightOrder: nightOrder,
-      dealDuration: 10
+      totalPlayers: playerCount
     });
 
-    this.startDealingPhase(10);
+    this.startDealingPhase();
   },
 
-  // 2. Dealing Phase (10s)
-  startDealingPhase(duration = 10) {
+  // 2. Dealing Phase (不限時，自行確認後翻面蓋牌)
+  startDealingPhase() {
     this.clearGameTimer();
     this.state.gamePhase = 'deal';
     if (!this.state.gameData) this.state.gameData = {};
     this.state.gameData.phase = 'deal';
-    this.state.gameData.timerSeconds = duration;
     this.state.gameData.cardFlipped = false;
+    this.state.gameData.hasConfirmedCard = false;
+    this.state.gameData.confirmedCount = this.state.gameData.confirmedCount || 0;
+    this.state.gameData.totalCount = this.state.players.length || 1;
 
     if ('vibrate' in navigator) navigator.vibrate(50);
     this.renderView();
-
-    this._gameInterval = setInterval(() => {
-      if (!this.state.gameData) {
-        this.clearGameTimer();
-        return;
-      }
-      this.state.gameData.timerSeconds--;
-      const timerEl = document.getElementById('game-phase-timer');
-      if (timerEl) {
-        timerEl.textContent = `${this.state.gameData.timerSeconds}s`;
-      }
-
-      if (this.state.gameData.timerSeconds <= 0) {
-        this.clearGameTimer();
-        if (this.state.isHost) {
-          this.startNightPhase();
-        }
-      }
-    }, 1000);
   },
 
   toggleFlipCard() {
     if (!this.state.gameData) return;
-    this.state.gameData.cardFlipped = !this.state.gameData.cardFlipped;
-    if ('vibrate' in navigator) navigator.vibrate(20);
-    const cardEl = document.getElementById('identity-flip-card');
-    if (cardEl) {
-      cardEl.classList.toggle('card-flipped', this.state.gameData.cardFlipped);
+    const isCurrentlyFlipped = !!this.state.gameData.cardFlipped;
+
+    if (isCurrentlyFlipped) {
+      // 點擊翻面蓋牌並確認
+      this.confirmAndHideCard();
+    } else {
+      // 點擊翻開查看
+      this.state.gameData.cardFlipped = true;
+      const cardEl = document.getElementById('identity-flip-card');
+      if (cardEl) {
+        cardEl.classList.add('card-flipped');
+      }
+      this.updateDealPhaseButton();
     }
   },
 
-  lockCardView() {
+  confirmAndHideCard() {
     if (!this.state.gameData) return;
     this.state.gameData.cardFlipped = false;
-    if ('vibrate' in navigator) navigator.vibrate(25);
+    this.state.gameData.hasConfirmedCard = true;
+
     const cardEl = document.getElementById('identity-flip-card');
     if (cardEl) {
       cardEl.classList.remove('card-flipped');
     }
-    App.showToast('已鎖定並隱藏身份牌 🔒', 'info');
+    this.updateDealPhaseButton();
+
+    this.broadcast({
+      type: 'PLAYER_CONFIRMED_CARD',
+      playerId: this.state.myPlayerId
+    });
+
+    if (this.state.isHost) {
+      this.handlePlayerConfirmedCard(this.state.myPlayerId);
+    }
+
+    App.showToast('已確認身份並翻面蓋牌 🔒 等待其他玩家...', 'info');
   },
 
-  // 3. Night Phase Sequence
+  handlePlayerConfirmedCard(playerId) {
+    if (!this.state.isHost || !this.state.gameData) return;
+    if (!this.state.gameData.confirmedPlayers) {
+      this.state.gameData.confirmedPlayers = {};
+    }
+    this.state.gameData.confirmedPlayers[playerId] = true;
+
+    const confirmedCount = Object.keys(this.state.gameData.confirmedPlayers).length;
+    const totalCount = this.state.players.length;
+
+    this.state.gameData.confirmedCount = confirmedCount;
+    this.state.gameData.totalCount = totalCount;
+
+    this.broadcast({
+      type: 'SYNC_CONFIRMED_COUNT',
+      confirmedCount: confirmedCount,
+      totalCount: totalCount
+    });
+
+    this.updateDealPhaseUI(confirmedCount, totalCount);
+
+    if (confirmedCount >= totalCount) {
+      App.showToast('所有玩家已確認身份！即將進入夜晚行動 🌙', 'success');
+      setTimeout(() => {
+        if (this.state.gamePhase === 'deal') {
+          this.startNightPhase();
+        }
+      }, 1200);
+    }
+  },
+
+  updateDealPhaseUI(confirmedCount, totalCount) {
+    const badgeEl = document.getElementById('deal-confirmed-badge');
+    if (badgeEl) {
+      badgeEl.textContent = `已蓋牌 ${confirmedCount} / ${totalCount} 人`;
+    }
+    const descEl = document.getElementById('deal-confirmed-desc');
+    if (descEl) {
+      descEl.textContent = confirmedCount >= totalCount 
+        ? '全員已蓋牌！即將進入夜晚行動...' 
+        : `等待其他玩家確認 (${confirmedCount}/${totalCount})`;
+    }
+    this.updateDealPhaseButton();
+  },
+
+  updateDealPhaseButton() {
+    const btn = document.getElementById('deal-confirm-action-btn');
+    if (!btn || !this.state.gameData) return;
+
+    const isFlipped = this.state.gameData.cardFlipped;
+    const hasConfirmed = this.state.gameData.hasConfirmedCard;
+
+    if (isFlipped) {
+      btn.className = "tap-scale w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-1.5";
+      btn.innerHTML = `<i data-lucide="eye-off" class="w-4 h-4"></i><span>我已確認身份 (翻面蓋牌)</span>`;
+    } else if (hasConfirmed) {
+      btn.className = "tap-scale w-full py-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center justify-center space-x-1.5";
+      btn.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i><span>已確認並蓋牌 (點擊卡牌可再次查看)</span>`;
+    } else {
+      btn.className = "tap-scale w-full py-3.5 rounded-2xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold text-xs border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center space-x-1.5";
+      btn.innerHTML = `<i data-lucide="eye" class="w-4 h-4 text-slate-500"></i><span>點擊卡牌翻面查看身份</span>`;
+    }
+    if (window.lucide) lucide.createIcons();
+  },
+
+  lockCardView() {
+    this.confirmAndHideCard();
+  },
+
+  // 3. Night Phase Sequence (僅呼叫場上角色，每輪 12s，無震動與聲音)
   startNightPhase() {
     if (!this.state.isHost) return;
     this.clearGameTimer();
+    const nightOrder = this.state.gameData?.nightOrder || [];
+    if (nightOrder.length === 0) {
+      this.startDayPhase();
+      return;
+    }
     this.state.gameData.currentNightIndex = 0;
     this.runNightStep(0);
   },
@@ -1727,9 +1845,7 @@ const WerewolfModule = {
     this.state.gameData.seerCenterTargets = [];
 
     const isMeActive = (this.state.gameData.myInitialRole === data.roleId);
-    if (isMeActive && 'vibrate' in navigator) {
-      navigator.vibrate([100, 50, 100]);
-    }
+    // 夜間階段保持靜音與無震動，避免身旁玩家察覺
 
     this.renderView();
 
@@ -1769,7 +1885,7 @@ const WerewolfModule = {
       this.processNightAction(payload);
     }
 
-    if ('vibrate' in navigator) navigator.vibrate(30);
+    // 夜間行動保持無震動
     this.renderView();
   },
 
@@ -1858,7 +1974,6 @@ const WerewolfModule = {
       else list = [list[1], idx];
     }
     this.state.gameData.seerCenterTargets = list;
-    if ('vibrate' in navigator) navigator.vibrate(15);
     this.renderView();
   },
 
@@ -1893,7 +2008,6 @@ const WerewolfModule = {
       else list = [list[1], targetId];
     }
     this.state.gameData.troubleTargets = list;
-    if ('vibrate' in navigator) navigator.vibrate(15);
     this.renderView();
   },
 
@@ -1912,11 +2026,12 @@ const WerewolfModule = {
     this.executeNightAction('SWAP', { centerIdx });
   },
 
-  // 4. Day Phase
+  // 4. Day Phase (白日討論時間為 人數 + 3 分鐘)
   startDayPhase() {
     if (!this.state.isHost) return;
     this.clearGameTimer();
-    const duration = 180;
+    const playerCount = this.state.players.length || 1;
+    const duration = (playerCount + 3) * 60; // 人數 + 3 分鐘
 
     this.broadcast({
       type: 'DAY_STARTED',
@@ -1931,7 +2046,8 @@ const WerewolfModule = {
     this.state.gamePhase = 'day';
     if (!this.state.gameData) this.state.gameData = {};
     this.state.gameData.phase = 'day';
-    this.state.gameData.timerSeconds = data.duration || 180;
+    const defaultDuration = ((this.state.players.length || 1) + 3) * 60;
+    this.state.gameData.timerSeconds = data.duration || defaultDuration;
 
     if ('vibrate' in navigator) navigator.vibrate([150, 100, 150]);
     this.renderView();
@@ -2184,19 +2300,21 @@ const WerewolfModule = {
     return this.renderRoomView();
   },
 
-  // View: Dealing Phase
+  // View: Dealing Phase (不限時確認，翻面蓋牌)
   renderDealPhase() {
     const roleId = this.state.gameData?.myInitialRole;
     const roleDef = this.getRoleDef(roleId);
-    const timerVal = this.state.gameData?.timerSeconds ?? 10;
     const isFlipped = this.state.gameData?.cardFlipped || false;
+    const hasConfirmed = this.state.gameData?.hasConfirmedCard || false;
+    const confirmedCount = this.state.gameData?.confirmedCount || (hasConfirmed ? 1 : 0);
+    const totalCount = this.state.gameData?.totalCount || this.state.players.length || 1;
 
     return `
       <div class="relative space-y-4 fade-in pb-16">
         <!-- Floating Reactions Container -->
         <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
 
-        <!-- Top Header & Timer -->
+        <!-- Top Header & Confirmed Progress Badge -->
         <div class="flex items-center justify-between pt-1">
           <button onclick="WerewolfModule.leaveRoom()" class="flex items-center space-x-1 text-xs font-bold text-red-500 hover:text-red-600 tap-scale">
             <i data-lucide="log-out" class="w-4 h-4"></i>
@@ -2204,8 +2322,8 @@ const WerewolfModule = {
           </button>
 
           <div class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 text-xs font-black text-indigo-600 dark:text-indigo-400">
-            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
-            <span id="game-phase-timer">${timerVal}s</span>
+            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+            <span id="deal-confirmed-badge">已蓋牌 ${confirmedCount} / ${totalCount} 人</span>
           </div>
         </div>
 
@@ -2215,30 +2333,28 @@ const WerewolfModule = {
             第一階段：確認身份
           </span>
           <h2 class="text-lg font-black text-slate-900 dark:text-white">點擊卡牌翻面查看</h2>
-          <p class="text-xs text-slate-500 dark:text-slate-400">確認身份後請翻回背面，避免身旁好友偷看！</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400">不限時確認，看完請翻回背面蓋牌，待全員蓋牌後自動進入夜晚！</p>
         </div>
 
         <!-- 3D Flip Card Container -->
-        <div class="flex flex-col items-center justify-center py-4">
+        <div class="flex flex-col items-center justify-center py-2">
           <div 
             id="identity-flip-card"
             onclick="WerewolfModule.toggleFlipCard()"
             class="w-64 h-96 perspective-1000 cursor-pointer tap-scale transition-transform select-none ${isFlipped ? 'card-flipped' : ''}"
           >
             <div class="card-flip-inner relative w-full h-full duration-500 rounded-3xl shadow-2xl">
-              <!-- Card Front: Face Down -->
-              <div class="backface-hidden absolute inset-0 w-full h-full rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 border-2 border-indigo-500/40 p-6 flex flex-col items-center justify-between text-white shadow-2xl">
+              <!-- Card Front: Face Down (Card Back Design) -->
+              <div class="backface-hidden absolute inset-0 w-full h-full rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 border-2 border-amber-400/50 p-6 flex flex-col items-center justify-between text-white shadow-2xl overflow-hidden">
                 <div class="flex items-center justify-between w-full opacity-60 text-xs font-mono">
                   <span>ONUW</span>
                   <span>#${this.state.roomId}</span>
                 </div>
 
-                <div class="text-center space-y-3">
-                  <div class="w-24 h-24 mx-auto rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-5xl shadow-inner night-glow">
-                    🌙
-                  </div>
+                <div class="text-center space-y-2">
+                  <img src="icons/roles/card_back.svg" alt="牌背" class="w-28 h-36 mx-auto object-contain drop-shadow-2xl">
                   <p class="text-sm font-bold tracking-wider text-indigo-200">點擊卡牌翻開查看</p>
-                  <p class="text-[11px] text-slate-400 leading-tight">記住您的身份與技能<br/>倒數結束後將進入夜晚閉眼</p>
+                  <p class="text-[11px] text-slate-400 leading-tight">確認身份後請翻回背面蓋牌<br/>待全員蓋牌後自動進入夜晚</p>
                 </div>
 
                 <div class="w-full text-center">
@@ -2264,7 +2380,7 @@ const WerewolfModule = {
                 </div>
 
                 <div class="text-center space-y-2">
-                  <div class="text-6xl animate-bounce">${roleDef.icon}</div>
+                  <img src="${roleDef.image}" alt="${roleDef.name}" class="w-24 h-24 mx-auto object-contain drop-shadow-2xl">
                   <h3 class="text-2xl font-black text-white">${roleDef.name}</h3>
                   <p class="text-xs leading-relaxed ${roleDef.team === 'werewolf' ? 'text-rose-200/90' : 'text-indigo-200/90'} max-w-[210px] mx-auto">
                     ${roleDef.desc}
@@ -2272,22 +2388,38 @@ const WerewolfModule = {
                 </div>
 
                 <div class="w-full text-center">
-                  <span class="text-[10px] text-slate-400">點擊任意處翻回背面隱藏</span>
+                  <span class="text-[10px] text-slate-400">點擊任意處翻回背面隱藏並確認</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Lock Button -->
+        <!-- Action Button & Status -->
         <div>
           <button 
-            onclick="WerewolfModule.lockCardView()" 
-            class="tap-scale w-full py-3.5 rounded-2xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold text-xs border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center space-x-1.5"
+            id="deal-confirm-action-btn"
+            onclick="WerewolfModule.toggleFlipCard()" 
+            class="tap-scale w-full py-3.5 rounded-2xl ${
+              isFlipped 
+                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/30' 
+                : (hasConfirmed 
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400' 
+                    : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 shadow-sm')
+            } font-bold text-xs flex items-center justify-center space-x-1.5"
           >
-            <i data-lucide="eye-off" class="w-4 h-4 text-slate-500"></i>
-            <span>我已記住身份 (翻回背面鎖定)</span>
+            <i data-lucide="${isFlipped ? 'eye-off' : (hasConfirmed ? 'check-circle' : 'eye')}" class="w-4 h-4"></i>
+            <span>${
+              isFlipped 
+                ? '我已確認身份 (翻面蓋牌)' 
+                : (hasConfirmed 
+                    ? '已確認並蓋牌 (點擊卡牌可再次查看)' 
+                    : '點擊卡牌翻面查看身份')
+            }</span>
           </button>
+          <p id="deal-confirmed-desc" class="text-[11px] text-slate-400 text-center mt-2">
+            ${confirmedCount >= totalCount ? '全員已蓋牌！即將進入夜晚行動...' : `等待其他玩家確認 (${confirmedCount}/${totalCount})`}
+          </p>
         </div>
       </div>
     `;
@@ -2339,7 +2471,7 @@ const WerewolfModule = {
               <span class="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-extrabold text-[10px] border border-amber-500/40">
                 🌟 輪到你的回合醒來！
               </span>
-              <span class="text-2xl">${roleDef.icon}</span>
+              <img src="${roleDef.image}" alt="${roleDef.name}" class="w-9 h-9 object-contain">
             </div>
 
             <div>
@@ -2368,7 +2500,7 @@ const WerewolfModule = {
 
             <div class="space-y-1">
               <h3 class="text-lg font-black tracking-wide text-slate-100">所有玩家請閉上雙眼</h3>
-              <p class="text-xs text-indigo-300">目前輪次：<strong class="text-amber-400 font-bold">${roleDef.icon} ${roleDef.name}</strong> 正在行動中</p>
+              <p class="text-xs text-indigo-300">目前輪次：<span class="inline-flex items-center space-x-1.5 text-amber-400 font-bold"><img src="${roleDef.image}" class="w-5 h-5 object-contain" alt="${roleDef.name}"><span>${roleDef.name}</span></span> 正在行動中</p>
             </div>
 
             <div class="p-3 rounded-2xl bg-white/5 border border-white/10 max-w-xs text-[11px] text-slate-400 leading-relaxed">
@@ -2419,7 +2551,7 @@ const WerewolfModule = {
                         : 'bg-slate-800/80 hover:bg-slate-700 border-slate-700 text-slate-300'
                     }"
                   >
-                    <div class="text-2xl mb-1">${isChosen ? rDef.icon : '🎴'}</div>
+                    <div class="mb-1 flex items-center justify-center">${isChosen ? `<img src="${rDef.image}" class="w-7 h-7 object-contain" alt="${rDef.name}">` : `<img src="icons/roles/card_back.svg" class="w-7 h-7 object-contain" alt="底牌">`}</div>
                     <div class="text-[11px] font-bold">${isChosen ? rDef.name : cLabels[idx]}</div>
                   </button>
                 `;
@@ -2483,7 +2615,7 @@ const WerewolfModule = {
               <span class="text-[10px] uppercase font-bold text-indigo-300">查驗玩家結果</span>
               <p class="text-xs font-bold text-white">
                 玩家 <strong>${actionResult.targetName}</strong> 的手牌為：<br/>
-                <span class="text-lg text-amber-400 inline-block mt-1">${rDef.icon} ${rDef.name}</span>
+                <span class="inline-flex items-center space-x-1.5 text-amber-400 mt-1 font-bold text-base"><img src="${rDef.image}" class="w-6 h-6 object-contain" alt="${rDef.name}"><span>${rDef.name}</span></span>
                 <span class="text-[11px] text-indigo-200">(${rDef.teamName})</span>
               </p>
             </div>
@@ -2496,12 +2628,12 @@ const WerewolfModule = {
               <span class="text-[10px] uppercase font-bold text-indigo-300">查驗底牌結果</span>
               <div class="grid grid-cols-2 gap-2 text-xs font-bold">
                 <div class="p-2 rounded-xl bg-black/40 text-center">
-                  <div class="text-xl">${r1.icon}</div>
+                  <img src="${r1.image}" class="w-8 h-8 object-contain mx-auto mb-1" alt="${r1.name}">
                   <div class="text-slate-300">${cLabels[actionResult.idx1]}</div>
                   <div class="text-white">${r1.name}</div>
                 </div>
                 <div class="p-2 rounded-xl bg-black/40 text-center">
-                  <div class="text-xl">${r2.icon}</div>
+                  <img src="${r2.image}" class="w-8 h-8 object-contain mx-auto mb-1" alt="${r2.name}">
                   <div class="text-slate-300">${cLabels[actionResult.idx2]}</div>
                   <div class="text-white">${r2.name}</div>
                 </div>
@@ -2570,7 +2702,7 @@ const WerewolfModule = {
             <span class="text-[10px] uppercase font-bold text-indigo-300">搶奪交換成功</span>
             <p class="text-xs text-slate-200">你已搶奪了 <strong>${actionResult.targetName}</strong> 的手牌！</p>
             <div class="p-3 rounded-xl bg-black/40 inline-block px-6">
-              <div class="text-4xl">${newDef.icon}</div>
+              <img src="${newDef.image}" class="w-12 h-12 object-contain mx-auto mb-1" alt="${newDef.name}">
               <div class="text-base font-black text-white mt-1">${newDef.name}</div>
               <div class="text-[10px] text-indigo-300 font-bold">${newDef.teamName}</div>
             </div>
@@ -2668,7 +2800,7 @@ const WerewolfModule = {
                 onclick="WerewolfModule.drunkSwap(${idx})"
                 class="tap-scale p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-center text-slate-200"
               >
-                <div class="text-2xl mb-1">🍺</div>
+                <img src="icons/roles/card_back.svg" class="w-8 h-8 object-contain mx-auto mb-1" alt="底牌">
                 <div class="text-xs font-bold">${cLabels[idx]}</div>
               </button>
             `).join('')}
@@ -2685,7 +2817,7 @@ const WerewolfModule = {
           <span class="text-[10px] uppercase font-bold text-indigo-300">天亮前最後確認</span>
           <p class="text-xs text-slate-200">你醒來查看自己目前的最終手牌：</p>
           <div class="p-3 rounded-2xl bg-black/40 inline-block px-8">
-            <div class="text-5xl">${finalDef.icon}</div>
+            <img src="${finalDef.image}" class="w-14 h-14 object-contain mx-auto mb-1" alt="${finalDef.name}">
             <div class="text-lg font-black text-white mt-1">${finalDef.name}</div>
             <div class="text-[10px] text-indigo-300 font-bold">${finalDef.teamName}</div>
           </div>
@@ -2967,7 +3099,7 @@ const WerewolfModule = {
                 return `
                   <div class="flex items-center justify-between p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40">
                     <div class="flex items-center space-x-2.5">
-                      <span class="text-2xl">${rDef.icon}</span>
+                      <img src="${rDef.image}" class="w-10 h-10 rounded-xl object-contain shrink-0 bg-white dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700 shadow-sm" alt="${rDef.name}">
                       <div>
                         <div class="text-xs font-bold text-slate-900 dark:text-white">${this.getPlayerName(pId)}</div>
                         <div class="text-[10px] text-rose-600 dark:text-rose-400 font-bold">${rDef.name} (${rDef.teamName})</div>
@@ -3029,12 +3161,12 @@ const WerewolfModule = {
                   <div class="flex items-center justify-between text-xs bg-white dark:bg-slate-800/60 p-2 rounded-xl">
                     <div class="flex items-center space-x-1">
                       <span class="text-slate-400 text-[10px]">原發：</span>
-                      <span>${initDef.icon} ${initDef.name}</span>
+                      <span class="inline-flex items-center space-x-1"><img src="${initDef.image}" class="w-4 h-4 object-contain inline-block" alt="${initDef.name}"><span>${initDef.name}</span></span>
                     </div>
                     <span class="text-slate-400 font-bold">➔</span>
                     <div class="flex items-center space-x-1 font-bold ${finalDef.team === 'werewolf' ? 'text-rose-500' : 'text-indigo-600 dark:text-indigo-400'}">
                       <span class="text-slate-400 text-[10px] font-normal">最終：</span>
-                      <span>${finalDef.icon} ${finalDef.name}</span>
+                      <span class="inline-flex items-center space-x-1"><img src="${finalDef.image}" class="w-4 h-4 object-contain inline-block" alt="${finalDef.name}"><span>${finalDef.name}</span></span>
                     </div>
                   </div>
 
@@ -3058,7 +3190,7 @@ const WerewolfModule = {
               return `
                 <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-center space-y-1">
                   <div class="text-[10px] font-mono text-slate-400">${cLabels[idx]}</div>
-                  <div class="text-3xl">${cDef.icon}</div>
+                  <img src="${cDef.image}" class="w-10 h-10 object-contain mx-auto mb-1 bg-white dark:bg-slate-800 rounded-xl p-0.5 shadow-sm border border-slate-200 dark:border-slate-700" alt="${cDef.name}">
                   <div class="text-xs font-bold text-slate-800 dark:text-slate-200">${cDef.name}</div>
                   ${wasSwapped ? `<span class="text-[9px] text-amber-500 font-bold">已換過</span>` : ''}
                 </div>

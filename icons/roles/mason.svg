@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs>
+    <linearGradient id="policeBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0c4a6e"/>
+      <stop offset="50%" stop-color="#0369a1"/>
+      <stop offset="100%" stop-color="#082f49"/>
+    </linearGradient>
+    <linearGradient id="badgeGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="50%" stop-color="#eab308"/>
+      <stop offset="100%" stop-color="#ca8a04"/>
+    </linearGradient>
+  </defs>
+  <!-- Card base -->
+  <rect x="2" y="2" width="76" height="76" rx="16" fill="url(#policeBg)" stroke="#38bdf8" stroke-width="2.5"/>
+  <!-- Police Cap Dome -->
+  <ellipse cx="40" cy="30" rx="22" ry="14" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/>
+  <rect x="18" y="28" width="44" height="12" rx="4" fill="#1e293b"/>
+  <!-- Cap Visor / Peak -->
+  <path d="M16 38 Q40 46 64 38 Q40 42 16 38 Z" fill="#020617"/>
+  <!-- Golden Cap Band -->
+  <rect x="20" y="34" width="40" height="3" fill="url(#badgeGold)"/>
+  <!-- Police Badge Shield on Cap -->
+  <path d="M40 18 L46 22 L45 30 L40 34 L35 30 L34 22 Z" fill="url(#badgeGold)" stroke="#ca8a04" stroke-width="1"/>
+  <!-- Star on Badge -->
+  <circle cx="40" cy="26" r="2.5" fill="#ffffff"/>
+  <!-- Vigilant Friendly Night Patrol Eyes -->
+  <ellipse cx="32" cy="48" rx="4" ry="5" fill="#ffffff"/>
+  <circle cx="32" cy="48" r="2.5" fill="#0369a1"/>
+  <ellipse cx="48" cy="48" rx="4" ry="5" fill="#ffffff"/>
+  <circle cx="48" cy="48" r="2.5" fill="#0369a1"/>
+  <!-- Confident Grin -->
+  <path d="M35 58 Q40 62 45 58" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+  <!-- Night Guard Lantern / Star Badge below -->
+  <circle cx="40" cy="68" r="3.5" fill="url(#badgeGold)"/>
+</svg>

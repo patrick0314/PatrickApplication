@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs>
+    <linearGradient id="drunkBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#78350f"/>
+      <stop offset="50%" stop-color="#b45309"/>
+      <stop offset="100%" stop-color="#451a03"/>
+    </linearGradient>
+    <linearGradient id="beerColor" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="30%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+  </defs>
+  <!-- Card base -->
+  <rect x="2" y="2" width="76" height="76" rx="16" fill="url(#drunkBg)" stroke="#f59e0b" stroke-width="2.5"/>
+  <!-- Dizzy Swirl Stars -->
+  <path d="M22 18 L24 22 L28 23 L25 26 L26 30 L22 27 L18 29 L19 25 L16 23 L20 22 Z" fill="#fde047" opacity="0.8"/>
+  <path d="M58 14 L60 17 L63 18 L61 20 L61 23 L58 21 L55 22 L56 19 L54 18 L57 17 Z" fill="#fde047" opacity="0.8"/>
+  <circle cx="28" cy="12" r="2" fill="#ffffff" opacity="0.7"/>
+  <circle cx="52" cy="10" r="1.5" fill="#ffffff" opacity="0.7"/>
+  <!-- Wooden Tavern Mug Handle -->
+  <path d="M52 34 C64 34, 64 54, 52 54" fill="none" stroke="#78350f" stroke-width="6" stroke-linecap="round"/>
+  <path d="M52 34 C62 34, 62 54, 52 54" fill="none" stroke="#b45309" stroke-width="3" stroke-linecap="round"/>
+  <!-- Mug Body -->
+  <rect x="24" y="28" width="30" height="36" rx="5" fill="url(#beerColor)" stroke="#78350f" stroke-width="2"/>
+  <!-- Wooden Slats / Mug Bands -->
+  <line x1="24" y1="38" x2="54" y2="38" stroke="#78350f" stroke-width="2"/>
+  <line x1="24" y1="54" x2="54" y2="54" stroke="#78350f" stroke-width="2"/>
+  <!-- Beer Bubbles -->
+  <circle cx="32" cy="46" r="1.5" fill="#ffffff" opacity="0.6"/>
+  <circle cx="44" cy="44" r="2" fill="#ffffff" opacity="0.6"/>
+  <circle cx="36" cy="50" r="1" fill="#ffffff" opacity="0.6"/>
+  <!-- Rich Fluffy Beer Foam Cap -->
+  <path d="M22 28 C20 22, 28 20, 31 24 C34 18, 42 18, 45 23 C48 19, 56 21, 56 28 C57 32, 51 34, 48 31 C45 34, 38 34, 35 31 C32 34, 25 33, 22 28 Z" fill="#ffffff" stroke="#f1f5f9" stroke-width="1.5"/>
+  <!-- Foam Droplet dripping -->
+  <circle cx="25" cy="36" r="2" fill="#ffffff"/>
+  <circle cx="26" cy="42" r="1.5" fill="#ffffff"/>
+  <!-- Drunk blush bubble -->
+  <ellipse cx="40" cy="68" rx="8" ry="3" fill="#f43f5e" opacity="0.5"/>
+</svg>

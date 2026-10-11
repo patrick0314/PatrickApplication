@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs>
+    <linearGradient id="foxBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4a044e"/>
+      <stop offset="50%" stop-color="#701a75"/>
+      <stop offset="100%" stop-color="#2e1065"/>
+    </linearGradient>
+    <linearGradient id="foxFur" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ea580c"/>
+      <stop offset="100%" stop-color="#c2410c"/>
+    </linearGradient>
+  </defs>
+  <!-- Card base -->
+  <rect x="2" y="2" width="76" height="76" rx="16" fill="url(#foxBg)" stroke="#d946ef" stroke-width="2.5"/>
+  <!-- Mysterious background aura -->
+  <circle cx="40" cy="40" r="24" fill="#a21caf" fill-opacity="0.3"/>
+  <!-- Fox Ears -->
+  <polygon points="20,16 34,32 16,38" fill="url(#foxFur)"/>
+  <polygon points="22,20 32,32 18,34" fill="#fef08a"/>
+  <polygon points="60,16 64,38 46,32" fill="url(#foxFur)"/>
+  <polygon points="58,20 62,34 48,32" fill="#fef08a"/>
+  <!-- Fox Face Main -->
+  <path d="M18 36 L40 68 L62 36 Q40 28 18 36 Z" fill="url(#foxFur)"/>
+  <!-- White Cheeks & Fur -->
+  <polygon points="18,36 34,44 40,68 30,52" fill="#ffffff"/>
+  <polygon points="62,36 46,44 40,68 50,52" fill="#ffffff"/>
+  <!-- Piercing Sly Eyes -->
+  <polygon points="27,38 37,42 30,44" fill="#facc15"/>
+  <circle cx="32" cy="41" r="1.5" fill="#000000"/>
+  <polygon points="53,38 50,44 43,42" fill="#facc15"/>
+  <circle cx="48" cy="41" r="1.5" fill="#000000"/>
+  <!-- Black Fox Nose -->
+  <polygon points="37,63 43,63 40,68" fill="#18181b"/>
+  <!-- Secret Whispering Eye / Minion Mark -->
+  <circle cx="40" cy="24" r="3" fill="#ec4899"/>
+</svg>

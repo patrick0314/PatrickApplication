@@ -1,4 +1,4 @@
-const CACHE_NAME = 'my-app-v14';
+const CACHE_NAME = 'my-app-v15';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -12,7 +12,19 @@ const ASSETS_TO_CACHE = [
   './js/modules/settings.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/apple-touch-icon.png'
+  './icons/apple-touch-icon.png',
+  './icons/roles/card_icon.svg',
+  './icons/roles/card_back.svg',
+  './icons/roles/werewolf.svg',
+  './icons/roles/minion.svg',
+  './icons/roles/mason.svg',
+  './icons/roles/seer.svg',
+  './icons/roles/robber.svg',
+  './icons/roles/troublemaker.svg',
+  './icons/roles/drunk.svg',
+  './icons/roles/insomniac.svg',
+  './icons/roles/hunter.svg',
+  './icons/roles/villager.svg'
 ];
 
 self.addEventListener('install', (event) => {

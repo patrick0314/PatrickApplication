@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs>
+    <linearGradient id="vilBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14532d"/>
+      <stop offset="50%" stop-color="#15803d"/>
+      <stop offset="100%" stop-color="#713f12"/>
+    </linearGradient>
+    <linearGradient id="strawHat" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="50%" stop-color="#facc15"/>
+      <stop offset="100%" stop-color="#ca8a04"/>
+    </linearGradient>
+  </defs>
+  <!-- Card base -->
+  <rect x="2" y="2" width="76" height="76" rx="16" fill="url(#vilBg)" stroke="#86efac" stroke-width="2.5"/>
+  <!-- Sunny Countryside Glow in background -->
+  <circle cx="40" cy="30" r="20" fill="#fde047" fill-opacity="0.3"/>
+  <!-- Farmer Straw Hat Brim -->
+  <ellipse cx="40" cy="38" rx="26" ry="8" fill="url(#strawHat)" stroke="#a16207" stroke-width="1.5"/>
+  <!-- Hat Crown / Dome -->
+  <path d="M26 36 C26 22, 54 22, 54 36 Z" fill="url(#strawHat)" stroke="#a16207" stroke-width="1.5"/>
+  <!-- Green Ribbon on hat -->
+  <path d="M26 34 Q40 37 54 34 L54 37 Q40 40 26 37 Z" fill="#15803d"/>
+  <!-- Golden Wheat Sheaf (Left) -->
+  <g transform="translate(24, 48) rotate(-20)">
+    <line x1="10" y1="0" x2="10" y2="24" stroke="#facc15" stroke-width="2"/>
+    <ellipse cx="6" cy="4" rx="3" ry="5" fill="#fef08a" transform="rotate(-30 6 4)"/>
+    <ellipse cx="14" cy="4" rx="3" ry="5" fill="#fef08a" transform="rotate(30 14 4)"/>
+    <ellipse cx="6" cy="12" rx="3" ry="5" fill="#fef08a" transform="rotate(-30 6 12)"/>
+    <ellipse cx="14" cy="12" rx="3" ry="5" fill="#fef08a" transform="rotate(30 14 12)"/>
+    <ellipse cx="10" cy="0" rx="3" ry="6" fill="#fef08a"/>
+  </g>
+  <!-- Pitchfork (Right) -->
+  <g transform="translate(44, 46) rotate(20)">
+    <!-- Handle -->
+    <line x1="8" y1="2" x2="8" y2="26" stroke="#b45309" stroke-width="2.5"/>
+    <!-- Prongs -->
+    <path d="M2 2 L2 10 Q8 14 14 10 L14 2" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+    <line x1="8" y1="4" x2="8" y2="13" stroke="#cbd5e1" stroke-width="2"/>
+  </g>
+</svg>

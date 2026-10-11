@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="cardGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#4338ca"/>
+    </linearGradient>
+    <linearGradient id="cardGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+  </defs>
+  <!-- Back card -->
+  <rect x="8" y="14" width="34" height="44" rx="6" fill="#1e1b4b" stroke="#818cf8" stroke-width="2" transform="rotate(-12 25 36)" opacity="0.7"/>
+  <!-- Middle card -->
+  <rect x="18" y="10" width="34" height="44" rx="6" fill="url(#cardGrad2)" stroke="#c4b5fd" stroke-width="2" transform="rotate(6 35 32)" opacity="0.85"/>
+  <!-- Front card -->
+  <rect x="15" y="8" width="34" height="46" rx="6" fill="url(#cardGrad1)" stroke="#ffffff" stroke-width="2.5"/>
+  <!-- Card emblem -->
+  <circle cx="32" cy="27" r="9" fill="#ffffff" fill-opacity="0.2"/>
+  <path d="M32 20 L34.5 25 L40 25.5 L36 29.5 L37 35 L32 32 L27 35 L28 29.5 L24 25.5 L29.5 25 Z" fill="#fbbf24"/>
+  <!-- Card detail lines -->
+  <line x1="22" y1="44" x2="42" y2="44" stroke="#ffffff" stroke-opacity="0.5" stroke-width="2" stroke-linecap="round"/>
+</svg>
