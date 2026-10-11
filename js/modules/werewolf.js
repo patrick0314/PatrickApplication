@@ -1567,10 +1567,9 @@ const WerewolfModule = {
     const centerCards = deck.slice(playerCount, playerCount + 3);
     const initialCenterCards = [...centerCards];
 
-    // 僅呼叫當前場上（玩家手中）有的角色輪次，不呼叫底牌角色
-    const playerRolesOnField = new Set(Object.values(initialCards));
+    // 所有角色池中選擇的角色（含底牌），在夜間輪次中皆必須依序呼叫，不可跳過
     const ORDERED_NIGHT_ROLES = ['werewolf', 'minion', 'mason', 'seer', 'robber', 'troublemaker', 'drunk', 'insomniac'];
-    const nightOrder = ORDERED_NIGHT_ROLES.filter(r => playerRolesOnField.has(r));
+    const nightOrder = ORDERED_NIGHT_ROLES.filter(r => (this.state.selectedRoles[r] || 0) > 0);
 
     this.state.gameData = {
       initialCards: initialCards,
@@ -1802,9 +1801,21 @@ const WerewolfModule = {
         this.state.gameData.nightLogs.push(`🐺 狼人閉眼（所有狼人牌皆在底牌）`);
       }
     } else if (roleId === 'minion') {
-      this.state.gameData.nightLogs.push(`🦊 爪牙睜眼確認了狼人同伴名單`);
+      const hasMinion = Object.values(this.state.gameData.initialCards).includes('minion');
+      if (hasMinion) {
+        this.state.gameData.nightLogs.push(`🦊 爪牙睜眼確認了狼人同伴名單`);
+      } else {
+        this.state.gameData.nightLogs.push(`🦊 爪牙輪次（爪牙牌在底牌）`);
+      }
     } else if (roleId === 'mason') {
-      this.state.gameData.nightLogs.push(`👮 守夜人們睜眼確認了同伴`);
+      const masons = Object.entries(this.state.gameData.initialCards)
+        .filter(([_, r]) => r === 'mason')
+        .map(([id]) => this.getPlayerName(id));
+      if (masons.length > 0) {
+        this.state.gameData.nightLogs.push(`👮 守夜人（${masons.join('、')}）睜眼確認了同伴`);
+      } else {
+        this.state.gameData.nightLogs.push(`👮 守夜人輪次（守夜人牌皆在底牌）`);
+      }
     }
 
     this.broadcast(payload);
@@ -2353,18 +2364,19 @@ const WerewolfModule = {
           <div 
             id="identity-flip-card"
             onclick="WerewolfModule.toggleFlipCard()"
+            style="touch-action: manipulation;"
             class="w-64 h-96 perspective-1000 cursor-pointer tap-scale transition-transform select-none ${isFlipped ? 'card-flipped' : ''}"
           >
             <div class="card-flip-inner relative w-full h-full duration-500 rounded-3xl shadow-2xl">
               <!-- Card Front: Face Down (Card Back Design) -->
-              <div class="backface-hidden absolute inset-0 w-full h-full rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 border-2 border-amber-400/50 p-6 flex flex-col items-center justify-between text-white shadow-2xl overflow-hidden">
+              <div class="card-face card-face-down bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 border-2 border-amber-400/50 p-6 flex flex-col items-center justify-between text-white shadow-2xl">
                 <div class="flex items-center justify-between w-full opacity-60 text-xs font-mono">
                   <span>ONUW</span>
                   <span>#${this.state.roomId}</span>
                 </div>
 
                 <div class="text-center space-y-2">
-                  <img src="icons/roles/card_back.svg" alt="牌背" class="w-28 h-36 mx-auto object-contain drop-shadow-2xl">
+                  <img src="icons/roles/card_back.svg" alt="牌背" class="w-28 h-36 mx-auto object-contain drop-shadow-2xl pointer-events-none">
                   <p class="text-sm font-bold tracking-wider text-indigo-200">點擊卡牌翻開查看</p>
                   <p class="text-[11px] text-slate-400 leading-tight">確認身份後請翻回背面蓋牌<br/>待全員蓋牌後自動進入夜晚</p>
                 </div>
@@ -2377,7 +2389,7 @@ const WerewolfModule = {
               </div>
 
               <!-- Card Back: Face Up (Revealed Role) -->
-              <div class="backface-hidden rotate-y-180 absolute inset-0 w-full h-full rounded-3xl ${
+              <div class="card-face card-face-up ${
                 roleDef.team === 'werewolf' 
                   ? 'bg-gradient-to-br from-slate-900 via-rose-950 to-slate-950 border-2 border-rose-500/60 text-rose-100 shadow-rose-950/50' 
                   : 'bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 border-2 border-indigo-500/60 text-indigo-100 shadow-indigo-950/50'
@@ -2392,7 +2404,7 @@ const WerewolfModule = {
                 </div>
 
                 <div class="text-center space-y-2">
-                  <img src="${roleDef.image}" alt="${roleDef.name}" class="w-24 h-24 mx-auto object-contain drop-shadow-2xl">
+                  <img src="${roleDef.image}" alt="${roleDef.name}" class="w-24 h-24 mx-auto object-contain drop-shadow-2xl pointer-events-none">
                   <h3 class="text-2xl font-black text-white">${roleDef.name}</h3>
                   <p class="text-xs leading-relaxed ${roleDef.team === 'werewolf' ? 'text-rose-200/90' : 'text-indigo-200/90'} max-w-[210px] mx-auto">
                     ${roleDef.desc}
