@@ -672,6 +672,9 @@ const WerewolfModule = {
                 this.checkAllVotedEndDay();
               }
             }
+            if (this.state.gameData?.claimedRoles) {
+              delete this.state.gameData.claimedRoles[data.playerId];
+            }
             if (this.state.gamePhase === 'day') {
               this.renderView();
             } else {
@@ -789,6 +792,24 @@ const WerewolfModule = {
 
           if (this.state.isHost) {
             this.checkAllVotedEndDay();
+          }
+
+          if (this.state.gamePhase === 'day') {
+            this.renderView();
+          }
+          break;
+
+        case 'CLAIM_ROLE':
+          if (data.fromId === this.state.myPlayerId) return;
+          if (!this.state.gameData) this.state.gameData = {};
+          if (!this.state.gameData.claimedRoles) this.state.gameData.claimedRoles = {};
+          this.state.gameData.claimedRoles[data.playerId] = data.claimedRole || null;
+
+          if (data.claimedRole) {
+            const pName = this.getPlayerName(data.playerId);
+            const def = this.getRoleDef(data.claimedRole);
+            this.showFloatingReaction(def.icon || '📣', `${pName} 宣稱 ${def.name}`);
+            App.showToast(`${pName} 宣稱身分為：${def.name} 📣`, 'info');
           }
 
           if (this.state.gamePhase === 'day') {
@@ -2086,6 +2107,8 @@ const WerewolfModule = {
 
     if (!this.state.gameData) this.state.gameData = {};
     this.state.gameData.endDayVotes = {};
+    this.state.gameData.claimedRoles = {};
+    this.state.isClaimModalOpen = false;
 
     this.broadcast({
       type: 'DAY_STARTED',
@@ -2101,6 +2124,8 @@ const WerewolfModule = {
     if (!this.state.gameData) this.state.gameData = {};
     this.state.gameData.phase = 'day';
     this.state.gameData.endDayVotes = {};
+    this.state.gameData.claimedRoles = {};
+    this.state.isClaimModalOpen = false;
     const defaultDuration = ((this.state.players.length || 1) + 3) * 60;
     this.state.gameData.timerSeconds = data.duration || defaultDuration;
 
@@ -2165,6 +2190,40 @@ const WerewolfModule = {
           this.startVotingPhase();
         }
       }, 700);
+    }
+  },
+
+  openClaimRoleModal() {
+    this.state.isClaimModalOpen = true;
+    this.renderView();
+  },
+
+  closeClaimRoleModal() {
+    this.state.isClaimModalOpen = false;
+    this.renderView();
+  },
+
+  claimRole(roleId) {
+    if (!this.state.gameData || this.state.gamePhase !== 'day') return;
+    if (!this.state.gameData.claimedRoles) this.state.gameData.claimedRoles = {};
+
+    this.state.gameData.claimedRoles[this.state.myPlayerId] = roleId || null;
+    this.state.isClaimModalOpen = false;
+
+    if ('vibrate' in navigator) navigator.vibrate(25);
+
+    this.broadcast({
+      type: 'CLAIM_ROLE',
+      playerId: this.state.myPlayerId,
+      claimedRole: roleId || null
+    });
+
+    this.renderView();
+    if (roleId) {
+      const def = this.getRoleDef(roleId);
+      App.showToast(`您已公開宣稱身分為：${def.name} 📣`, 'info');
+    } else {
+      App.showToast('已取消身分宣稱', 'info');
     }
   },
 
@@ -2942,10 +3001,17 @@ const WerewolfModule = {
     const isHost = this.state.isHost;
 
     const endDayVotes = this.state.gameData?.endDayVotes || {};
+    const claimedRoles = this.state.gameData?.claimedRoles || {};
+    const myClaimedRole = claimedRoles[this.state.myPlayerId] || null;
     const totalPlayers = this.state.players.length || 1;
     const votedCount = this.state.players.filter(p => !!endDayVotes[p.id]).length;
     const hasMyVoted = !!endDayVotes[this.state.myPlayerId];
     const allVoted = (totalPlayers > 0 && votedCount >= totalPlayers);
+    const isClaimModalOpen = !!this.state.isClaimModalOpen;
+
+    const activeRoleIds = Object.keys(this.state.selectedRoles || {}).filter(id => (this.state.selectedRoles[id] || 0) > 0);
+    const availableRoleIds = (activeRoleIds.length > 0 ? activeRoleIds : Object.keys(this.ROLES));
+    const gameRoles = availableRoleIds.map(id => this.getRoleDef(id));
 
     const now = Date.now();
     const elapsed = now - (this.state.lastReactionTime || 0);
@@ -2978,11 +3044,11 @@ const WerewolfModule = {
           </div>
           <h2 class="text-2xl font-black text-white">天亮了！全體睜眼！</h2>
           <p class="text-xs text-amber-100 leading-relaxed">
-            自由發言與邏輯推理，找出誰在夜裡調換了卡牌，並揪出潛伏的狼人！
+            自由發言與邏輯推理，找出誰在夜裡調換了卡牌，並揪出潛伏的狼人！點選自己的頭像可宣稱身分。
           </p>
         </div>
 
-        <!-- Living Players Grid with End Day Vote status -->
+        <!-- Living Players Grid with Claimed Role and End Day Vote status -->
         <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 flex items-center space-x-1">
@@ -2994,30 +3060,83 @@ const WerewolfModule = {
             </span>
           </div>
 
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-2 gap-2.5">
             ${this.state.players.map(p => {
               const isVoted = !!endDayVotes[p.id];
               const isMe = (p.id === this.state.myPlayerId);
+              const claimedRoleId = claimedRoles[p.id];
+              const claimedDef = claimedRoleId ? this.getRoleDef(claimedRoleId) : null;
+
               return `
                 <div class="p-3 rounded-2xl ${
                   isVoted 
                     ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 shadow-sm' 
-                    : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800'
-                } border flex items-center justify-between transition-all">
-                  <div class="flex items-center space-x-2 truncate">
-                    <div class="w-8 h-8 rounded-xl ${isVoted ? 'bg-emerald-600' : 'bg-indigo-600'} text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
-                      ${p.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div class="truncate">
-                      <div class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">${p.name} ${isMe ? '(我)' : ''}</div>
-                      <div class="text-[10px] ${isVoted ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}">
-                        ${isVoted ? '✓ 同意中止' : '辯論中...'}
+                    : (isMe 
+                        ? 'bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/40' 
+                        : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800')
+                } border flex flex-col justify-between transition-all space-y-2">
+                  <!-- Top Row: Avatar & Name & Status Dot -->
+                  <div class="flex items-start justify-between">
+                    <div class="flex items-center space-x-2 truncate">
+                      <!-- Avatar (Clickable if isMe) -->
+                      <div 
+                        ${isMe ? 'onclick="WerewolfModule.openClaimRoleModal()"' : ''}
+                        class="w-10 h-10 rounded-xl ${isVoted ? 'bg-emerald-600' : 'bg-indigo-600'} text-white flex items-center justify-center font-black text-xs shrink-0 shadow-sm relative ${isMe ? 'cursor-pointer hover:ring-2 hover:ring-indigo-400 tap-scale' : ''}"
+                        title="${isMe ? '點擊宣稱身分' : ''}"
+                      >
+                        ${claimedDef ? `
+                          <img src="${claimedDef.image}" class="w-7 h-7 object-contain pointer-events-none" alt="${claimedDef.name}">
+                        ` : `
+                          ${p.name.charAt(0).toUpperCase()}
+                        `}
+                        ${isMe ? `
+                          <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-white flex items-center justify-center text-[9px] shadow-sm border border-white dark:border-slate-800">
+                            🏷️
+                          </div>
+                        ` : ''}
+                      </div>
+
+                      <div class="truncate">
+                        <div class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate flex items-center space-x-1">
+                          <span class="truncate">${p.name}</span>
+                          ${isMe ? '<span class="text-[10px] text-indigo-500 font-extrabold shrink-0">(我)</span>' : ''}
+                        </div>
+                        <div class="text-[10px] ${isVoted ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}">
+                          ${isVoted ? '✓ 同意中止' : '辯論中...'}
+                        </div>
                       </div>
                     </div>
+
+                    ${isVoted ? `
+                      <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse mt-1"></span>
+                    ` : ''}
                   </div>
-                  ${isVoted ? `
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse ml-1"></span>
-                  ` : ''}
+
+                  <!-- Bottom Row: Claimed Role Badge -->
+                  <div class="pt-0.5">
+                    ${claimedDef ? `
+                      <div 
+                        ${isMe ? 'onclick="WerewolfModule.openClaimRoleModal()"' : ''}
+                        class="inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg ${
+                          claimedDef.team === 'werewolf' 
+                            ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50' 
+                            : 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/50'
+                        } font-bold text-[10px] truncate max-w-full ${isMe ? 'cursor-pointer tap-scale' : ''}"
+                      >
+                        <img src="${claimedDef.image}" class="w-3.5 h-3.5 object-contain shrink-0" alt="">
+                        <span class="truncate">自稱：${claimedDef.name}</span>
+                      </div>
+                    ` : (isMe ? `
+                      <button 
+                        onclick="WerewolfModule.openClaimRoleModal()" 
+                        class="tap-scale inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-[10px] border border-dashed border-indigo-300 dark:border-indigo-800 hover:bg-indigo-100"
+                      >
+                        <span>🏷️ 點此宣稱身分</span>
+                      </button>
+                    ` : `
+                      <span class="text-[10px] text-slate-400 italic">尚未宣稱身分</span>
+                    `)}
+                  </div>
                 </div>
               `;
             }).join('')}
@@ -3066,6 +3185,7 @@ const WerewolfModule = {
         <div class="rounded-2xl p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/40 space-y-1.5">
           <p class="text-xs font-bold text-indigo-700 dark:text-indigo-300">💡 辯論提示與技巧：</p>
           <ul class="text-[11px] text-slate-600 dark:text-slate-400 space-y-1 leading-relaxed">
+            <li>• 點選自己的頭像或按鈕，隨時向全體公開宣稱你的身份。</li>
             <li>• 預言家可主動跳出告知查驗結果，建立邏輯基石。</li>
             <li>• 強盜與搗蛋鬼可選擇何時誠實說出調換對象。</li>
             <li>• 狼人可偽裝成好人製造混亂，留意發言是否有時間矛盾！</li>
@@ -3087,6 +3207,71 @@ const WerewolfModule = {
             <button onclick="WerewolfModule.sendReaction('💀')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">💀</button>
           </div>
         </div>
+
+        <!-- Claim Role Modal (Shown when isClaimModalOpen is true) -->
+        ${isClaimModalOpen ? `
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm fade-in">
+            <div class="w-full max-w-sm rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4 max-h-[85vh] flex flex-col">
+              <!-- Modal Header -->
+              <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div class="flex items-center space-x-2">
+                  <span class="text-xl">🏷️</span>
+                  <div>
+                    <h3 class="text-sm font-black text-slate-900 dark:text-white">宣稱你的身分</h3>
+                    <p class="text-[10px] text-slate-400">公開展示給房間內所有玩家 (可隨時更改)</p>
+                  </div>
+                </div>
+                <button onclick="WerewolfModule.closeClaimRoleModal()" class="h-8 w-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center justify-center tap-scale">
+                  <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+              </div>
+
+              <!-- Roles Grid -->
+              <div class="flex-1 overflow-y-auto space-y-2 pr-1 py-1">
+                <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400">請選擇你要聲稱的角色：</p>
+                <div class="grid grid-cols-2 gap-2">
+                  ${gameRoles.map(role => {
+                    const isSelected = (myClaimedRole === role.id);
+                    return `
+                      <button 
+                        onclick="WerewolfModule.claimRole('${role.id}')"
+                        class="tap-scale p-2.5 rounded-2xl border text-left flex items-center space-x-2.5 transition-all ${
+                          isSelected 
+                            ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-500 ring-2 ring-indigo-500/30 shadow-sm' 
+                            : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-indigo-300'
+                        }"
+                      >
+                        <img src="${role.image}" alt="${role.name}" class="w-8 h-8 object-contain shrink-0 rounded-lg p-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                        <div class="truncate">
+                          <div class="text-xs font-black text-slate-900 dark:text-white truncate">${role.name}</div>
+                          <div class="text-[9px] ${role.team === 'werewolf' ? 'text-rose-500' : 'text-indigo-500'} font-bold">${role.teamName}</div>
+                        </div>
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+
+              <!-- Modal Footer -->
+              <div class="flex space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                ${myClaimedRole ? `
+                  <button 
+                    onclick="WerewolfModule.claimRole(null)" 
+                    class="tap-scale flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 dark:hover:bg-slate-700"
+                  >
+                    取消聲稱
+                  </button>
+                ` : ''}
+                <button 
+                  onclick="WerewolfModule.closeClaimRoleModal()" 
+                  class="tap-scale flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md"
+                >
+                  關閉
+                </button>
+              </div>
+            </div>
+          </div>
+        ` : ''}
       </div>
     `;
   },
