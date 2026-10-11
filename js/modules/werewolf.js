@@ -30,7 +30,6 @@ const WerewolfModule = {
   ],
 
   init() {
-    // Generate persistent playerId if not exists
     if (!this.state.myPlayerId) {
       let pid = sessionStorage.getItem('onuw_player_id');
       if (!pid) {
@@ -40,7 +39,6 @@ const WerewolfModule = {
       this.state.myPlayerId = pid;
     }
 
-    // Auto-fill room from URL hash if present
     const hash = window.location.hash;
     if (hash && hash.includes('room=')) {
       const match = hash.match(/room=([A-Za-z0-9]+)/);
@@ -54,7 +52,6 @@ const WerewolfModule = {
     return `patricksapp/werewolf/room/${roomId}`;
   },
 
-  // Connect to public MQTT over WSS broker
   connectBroker(callback) {
     if (this.state.client && this.state.connected) {
       if (callback) callback();
@@ -86,7 +83,6 @@ const WerewolfModule = {
       client.on('error', (err) => {
         console.error('[Werewolf] Connection error:', err);
         this.state.connected = false;
-        // Try fallback broker
         this.state.brokerIndex = (this.state.brokerIndex + 1) % this.brokers.length;
         this.updateRoomUI();
       });
@@ -125,7 +121,6 @@ const WerewolfModule = {
     const settings = StorageManager.get('settings', { userName: 'default' });
     this.state.myPlayerName = settings.userName || 'default';
     
-    // Generate clean 4-char room code
     const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     let code = '';
     for (let i = 0; i < 4; i++) {
@@ -134,12 +129,12 @@ const WerewolfModule = {
 
     this.state.roomId = code;
     this.state.isHost = true;
-    this.state.isReady = true; // Host is ready by default
+    this.state.isReady = false; // Initially waiting for ready
     this.state.players = [{
       id: this.state.myPlayerId,
       name: this.state.myPlayerName,
       isHost: true,
-      isReady: true,
+      isReady: false,
       joinedAt: Date.now()
     }];
     this.state.messages = [];
@@ -154,7 +149,6 @@ const WerewolfModule = {
           App.showToast(`房間 #${this.state.roomId} 建立成功！`, 'success');
           this.renderView();
           
-          // Announce host joined
           this.broadcast({
             type: 'SYNC_STATE',
             players: this.state.players,
@@ -191,7 +185,6 @@ const WerewolfModule = {
           this.state.currentView = 'room';
           this.renderView();
 
-          // Send Join Request to room
           this.broadcast({
             type: 'PLAYER_JOIN',
             player: {
@@ -211,7 +204,6 @@ const WerewolfModule = {
     });
   },
 
-  // Leave Room
   leaveRoom() {
     if (confirm('確定要退出房間嗎？')) {
       if (this.state.client && this.state.roomId) {
@@ -233,7 +225,6 @@ const WerewolfModule = {
     }
   },
 
-  // Broadcast Message to all players in the room
   broadcast(msgObj) {
     if (!this.state.client || !this.state.roomId || !this.state.connected) return;
     const payload = JSON.stringify({
@@ -245,7 +236,6 @@ const WerewolfModule = {
     this.state.client.publish(this.getRoomTopic(this.state.roomId), payload);
   },
 
-  // Handle incoming MQTT messages
   handleIncomingMessage(topic, payload) {
     try {
       const data = JSON.parse(payload.toString());
@@ -254,13 +244,11 @@ const WerewolfModule = {
       switch (data.type) {
         case 'PLAYER_JOIN':
           if (data.player.id === this.state.myPlayerId) return;
-          // Add player if not exists
           if (!this.state.players.some(p => p.id === data.player.id)) {
             this.state.players.push(data.player);
             this.addSystemMessage(`${data.player.name} 加入了房間 👋`);
             App.showToast(`${data.player.name} 加入了房間`, 'info');
           }
-          // If I am host, reply with complete room state to sync the new player
           if (this.state.isHost) {
             this.broadcast({
               type: 'SYNC_STATE',
@@ -272,9 +260,7 @@ const WerewolfModule = {
           break;
 
         case 'SYNC_STATE':
-          // Update players list from host authority
           if (data.players && Array.isArray(data.players)) {
-            // Merge myself into players list if host missed me
             let currentPlayers = data.players;
             const myself = currentPlayers.find(p => p.id === this.state.myPlayerId);
             if (!myself) {
@@ -285,6 +271,9 @@ const WerewolfModule = {
                 isReady: this.state.isReady,
                 joinedAt: Date.now()
               });
+            } else {
+              // keep my own local ready state authoritative
+              myself.isReady = this.state.isReady;
             }
             this.state.players = currentPlayers;
             this.state.isHost = (data.hostId === this.state.myPlayerId);
@@ -305,7 +294,6 @@ const WerewolfModule = {
           if (leftPlayer) {
             this.state.players = this.state.players.filter(p => p.id !== data.playerId);
             this.addSystemMessage(`${leftPlayer.name} 離開了房間`);
-            // If host left, elect first player as host
             if (leftPlayer.isHost && this.state.players.length > 0) {
               this.state.players[0].isHost = true;
               if (this.state.players[0].id === this.state.myPlayerId) {
@@ -326,7 +314,6 @@ const WerewolfModule = {
             time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
           });
           this.showFloatingReaction(data.emoji, data.fromName);
-          this.updateMessagesUI();
           break;
 
         case 'CHAT':
@@ -337,7 +324,6 @@ const WerewolfModule = {
             isReaction: false,
             time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
           });
-          this.updateMessagesUI();
           break;
 
         case 'BROADCAST_TEST':
@@ -358,12 +344,13 @@ const WerewolfModule = {
     }
   },
 
+  // Toggle ready status
   toggleReady() {
     this.state.isReady = !this.state.isReady;
     const me = this.state.players.find(p => p.id === this.state.myPlayerId);
     if (me) me.isReady = this.state.isReady;
 
-    if ('vibrate' in navigator) navigator.vibrate(20);
+    if ('vibrate' in navigator) navigator.vibrate(25);
 
     this.broadcast({
       type: 'TOGGLE_READY',
@@ -372,7 +359,7 @@ const WerewolfModule = {
     });
 
     this.updateRoomUI();
-    App.showToast(this.state.isReady ? '已標記為準備就緒！' : '已取消準備', 'info');
+    App.showToast(this.state.isReady ? '已標記為準備就緒！' : '已切換為等待準備', 'info');
   },
 
   sendReaction(emoji) {
@@ -382,21 +369,6 @@ const WerewolfModule = {
       emoji: emoji
     });
     this.showFloatingReaction(emoji, '我');
-  },
-
-  sendChat() {
-    const input = document.getElementById('room-chat-input');
-    if (!input) return;
-    const text = input.value.trim();
-    if (!text) return;
-
-    this.broadcast({
-      type: 'CHAT',
-      fromName: this.state.myPlayerName,
-      text: text
-    });
-
-    input.value = '';
   },
 
   sendBroadcastTest() {
@@ -423,13 +395,13 @@ const WerewolfModule = {
     if (!container) return;
 
     const el = document.createElement('div');
-    el.className = 'absolute right-4 bottom-20 flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 text-white text-xs font-bold shadow-xl border border-white/20 animate-bounce pointer-events-none z-50';
-    el.innerHTML = `<span class="text-lg">${emoji}</span><span class="text-[10px] opacity-80">${fromName}</span>`;
+    el.className = 'absolute right-4 bottom-24 flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/95 text-white text-xs font-bold shadow-2xl border border-white/20 animate-bounce pointer-events-none z-50';
+    el.innerHTML = `<span class="text-xl">${emoji}</span><span class="text-[11px] opacity-90">${fromName}</span>`;
     container.appendChild(el);
 
     setTimeout(() => {
       if (el && el.parentNode) el.parentNode.removeChild(el);
-    }, 2200);
+    }, 2000);
   },
 
   addSystemMessage(text) {
@@ -439,10 +411,8 @@ const WerewolfModule = {
       text: text,
       time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
     });
-    this.updateMessagesUI();
   },
 
-  // Main Render Gateway
   render() {
     this.init();
     if (this.state.currentView === 'room' && this.state.roomId) {
@@ -486,14 +456,12 @@ const WerewolfModule = {
               跨手機多人即時連線系統。任何人透過房間代碼即可加入，無須同一 Wi-Fi，4G/5G 皆可連線！
             </p>
 
-            <!-- Network Status Pill -->
             <div class="mt-4 inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold">
               <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               <span>WSS 加密通道已就緒 (延遲 < 50ms)</span>
             </div>
           </div>
 
-          <!-- Ambient Glow Motif -->
           <div class="absolute -right-10 -bottom-10 h-36 w-36 rounded-full bg-indigo-600/20 blur-2xl"></div>
         </div>
 
@@ -568,7 +536,7 @@ const WerewolfModule = {
     `;
   },
 
-  // View 2: Room Screen
+  // View 2: Room Screen (Clean Layout without Overlapping)
   renderRoomView() {
     const isMeReady = this.state.isReady;
     const allReady = this.state.players.length >= 2 && this.state.players.every(p => p.isReady);
@@ -605,7 +573,7 @@ const WerewolfModule = {
           </div>
 
           <div class="text-right">
-            <span class="text-xs font-bold bg-white/10 px-3 py-1 rounded-full text-indigo-200">
+            <span id="room-player-count" class="text-xs font-bold bg-white/10 px-3 py-1 rounded-full text-indigo-200">
               ${this.state.players.length} 人在線
             </span>
             <p class="text-[10px] text-slate-400 mt-1">
@@ -621,7 +589,7 @@ const WerewolfModule = {
               <i data-lucide="users" class="w-4 h-4 text-indigo-500"></i>
               <span>房間玩家列表 (${this.state.players.length})</span>
             </h2>
-            <span class="text-[10px] text-slate-400">
+            <span id="room-status-summary" class="text-[10px] font-bold ${allReady ? 'text-emerald-500' : 'text-slate-400'}">
               ${allReady ? '🎉 全員就緒！' : '等待準備中...'}
             </span>
           </div>
@@ -644,29 +612,39 @@ const WerewolfModule = {
           </div>
         ` : ''}
 
-        <!-- Quick Emoji Reaction Bar (Instant Sync) -->
-        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/70 p-3 border border-slate-200 dark:border-slate-800 flex items-center justify-around">
-          <button onclick="WerewolfModule.sendReaction('🐺')" class="tap-scale text-xl hover:scale-125 transition" title="狼嚎">🐺</button>
-          <button onclick="WerewolfModule.sendReaction('👀')" class="tap-scale text-xl hover:scale-125 transition" title="懷疑">👀</button>
-          <button onclick="WerewolfModule.sendReaction('🔥')" class="tap-scale text-xl hover:scale-125 transition" title="開戰">🔥</button>
-          <button onclick="WerewolfModule.sendReaction('👍')" class="tap-scale text-xl hover:scale-125 transition" title="讚">👍</button>
-          <button onclick="WerewolfModule.sendReaction('❓')" class="tap-scale text-xl hover:scale-125 transition" title="疑惑">❓</button>
-          <button onclick="WerewolfModule.sendReaction('💀')" class="tap-scale text-xl hover:scale-125 transition" title="出局">💀</button>
-        </div>
+        <!-- Interactive & Ready Section (Natural Layout - No Overlap!) -->
+        <div class="space-y-3 pt-1">
+          <!-- Quick Emoji Reactions Bar -->
+          <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-3.5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
+            <div class="flex items-center justify-between px-1">
+              <span class="text-[11px] font-bold text-slate-600 dark:text-slate-300">快捷表情互動</span>
+              <span class="text-[10px] text-slate-400">點擊即時廣播全體手機</span>
+            </div>
+            <div class="flex items-center justify-around py-1">
+              <button onclick="WerewolfModule.sendReaction('🐺')" class="tap-scale text-2xl hover:scale-125 transition" title="狼嚎">🐺</button>
+              <button onclick="WerewolfModule.sendReaction('👀')" class="tap-scale text-2xl hover:scale-125 transition" title="懷疑">👀</button>
+              <button onclick="WerewolfModule.sendReaction('🔥')" class="tap-scale text-2xl hover:scale-125 transition" title="開戰">🔥</button>
+              <button onclick="WerewolfModule.sendReaction('👍')" class="tap-scale text-2xl hover:scale-125 transition" title="讚">👍</button>
+              <button onclick="WerewolfModule.sendReaction('❓')" class="tap-scale text-2xl hover:scale-125 transition" title="疑惑">❓</button>
+              <button onclick="WerewolfModule.sendReaction('💀')" class="tap-scale text-2xl hover:scale-125 transition" title="出局">💀</button>
+            </div>
+          </div>
 
-        <!-- Bottom Primary Action (Toggle Ready) -->
-        <div class="fixed bottom-16 left-0 right-0 max-w-md mx-auto px-4 z-30">
-          <button 
-            onclick="WerewolfModule.toggleReady()" 
-            class="tap-scale w-full py-4 rounded-2xl font-black text-sm shadow-xl flex items-center justify-center space-x-2 transition-all ${
-              isMeReady 
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30' 
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30'
-            }"
-          >
-            <i data-lucide="${isMeReady ? 'check-circle-2' : 'zap'}" class="w-5 h-5"></i>
-            <span>${isMeReady ? '已就緒 (點擊取消)' : '立即準備 (點擊就緒)'}</span>
-          </button>
+          <!-- Primary Ready Button (In Flow, Never Covers Other UI) -->
+          <div>
+            <button 
+              id="room-ready-btn"
+              onclick="WerewolfModule.toggleReady()" 
+              class="tap-scale w-full py-4 rounded-2xl font-black text-sm shadow-xl flex items-center justify-center space-x-2 transition-all ${
+                isMeReady 
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30' 
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30'
+              }"
+            >
+              <i data-lucide="${isMeReady ? 'check-circle-2' : 'zap'}" class="w-5 h-5"></i>
+              <span>${isMeReady ? '已就緒 (點擊取消)' : '立即準備 (點擊就緒)'}</span>
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -718,16 +696,52 @@ const WerewolfModule = {
     }).join('');
   },
 
+  // Update Ready Button DOM specifically
+  updateReadyButtonUI() {
+    const btn = document.getElementById('room-ready-btn');
+    if (!btn) return;
+
+    const isMeReady = this.state.isReady;
+    btn.className = `tap-scale w-full py-4 rounded-2xl font-black text-sm shadow-xl flex items-center justify-center space-x-2 transition-all ${
+      isMeReady 
+        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30' 
+        : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30'
+    }`;
+
+    btn.innerHTML = `
+      <i data-lucide="${isMeReady ? 'check-circle-2' : 'zap'}" class="w-5 h-5"></i>
+      <span>${isMeReady ? '已就緒 (點擊取消)' : '立即準備 (點擊就緒)'}</span>
+    `;
+  },
+
+  // Synchronize entire room interface
   updateRoomUI() {
     if (this.state.currentView !== 'room') return;
+
+    // 1. Update player list
     const container = document.getElementById('players-list-container');
     if (container) {
       container.innerHTML = this.renderPlayerCards();
-      if (window.lucide) lucide.createIcons();
     }
-  },
 
-  updateMessagesUI() {}
+    // 2. Update ready button text, icon, and colors
+    this.updateReadyButtonUI();
+
+    // 3. Update player count and summary
+    const countEl = document.getElementById('room-player-count');
+    if (countEl) {
+      countEl.textContent = `${this.state.players.length} 人在線`;
+    }
+
+    const summaryEl = document.getElementById('room-status-summary');
+    if (summaryEl) {
+      const allReady = this.state.players.length >= 2 && this.state.players.every(p => p.isReady);
+      summaryEl.textContent = allReady ? '🎉 全員就緒！' : '等待準備中...';
+      summaryEl.className = `text-[10px] font-bold ${allReady ? 'text-emerald-500' : 'text-slate-400'}`;
+    }
+
+    if (window.lucide) lucide.createIcons();
+  }
 };
 
 window.WerewolfModule = WerewolfModule;
