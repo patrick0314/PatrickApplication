@@ -5,6 +5,9 @@
 const App = {
   activeTab: 'dashboard',
 
+  // Primary Bottom Nav Tab IDs
+  navTabs: ['dashboard', 'settings'],
+
   modules: [
     {
       id: 'dashboard',
@@ -12,6 +15,13 @@ const App = {
       icon: 'layout-grid',
       render: () => DashboardModule.render(),
       init: () => DashboardModule.init()
+    },
+    {
+      id: 'werewolf',
+      name: '一夜狼人殺',
+      icon: 'moon',
+      render: () => WerewolfModule.render(),
+      init: () => WerewolfModule.init()
     },
     {
       id: 'settings',
@@ -27,7 +37,6 @@ const App = {
     this.updateHeader();
     this.registerServiceWorker();
 
-    // Live update header date & time every 30 seconds
     setInterval(() => this.updateHeader(), 30000);
 
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -54,13 +63,11 @@ const App = {
     const settings = StorageManager.get('settings', { userName: 'default' });
     const userName = settings.userName || 'default';
     
-    // Top app title: "暱稱's App"
     const titleEl = document.getElementById('app-header-title');
     if (titleEl) {
       titleEl.textContent = `${userName}'s App`;
     }
 
-    // Top date and time: Year Month Day Hour:Minute
     const dateEl = document.getElementById('app-header-date');
     if (dateEl) {
       const now = new Date();
@@ -130,8 +137,11 @@ const App = {
     const navContainer = document.getElementById('bottom-nav-items');
     if (!navContainer) return;
 
-    navContainer.innerHTML = this.modules.map(mod => {
-      const isActive = mod.id === this.activeTab;
+    // Maintain only the primary tabs: '首頁' and '設定'
+    const displayedModules = this.modules.filter(m => this.navTabs.includes(m.id));
+
+    navContainer.innerHTML = displayedModules.map(mod => {
+      const isActive = mod.id === this.activeTab || (mod.id === 'dashboard' && this.activeTab === 'werewolf');
       const badgeCount = mod.badge ? mod.badge() : 0;
 
       return `

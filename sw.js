@@ -1,12 +1,14 @@
-const CACHE_NAME = 'my-app-v6';
+const CACHE_NAME = 'my-app-v7';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
   './css/styles.css',
+  './js/vendor/mqtt.min.js',
   './js/storage.js',
   './js/app.js',
   './js/modules/dashboard.js',
+  './js/modules/werewolf.js',
   './js/modules/settings.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
