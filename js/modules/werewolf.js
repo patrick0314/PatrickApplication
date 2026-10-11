@@ -30,14 +30,18 @@ const WerewolfModule = {
       seer: 1,
       robber: 1,
       troublemaker: 1,
+      drunk: 0,
       insomniac: 0,
       hunter: 0,
       villager: 1
     },
-    isCustomRoles: false
+    isCustomRoles: false,
+    gamePhase: 'lobby', // 'lobby' | 'deal' | 'night' | 'day' | 'voting' | 'result'
+    gameData: null
   },
 
   _reactionTimer: null,
+  _gameInterval: null,
 
   brokers: [
     'wss://broker.emqx.io:8084/mqtt',
@@ -107,9 +111,21 @@ const WerewolfModule = {
       team: 'villager',
       teamName: '村民陣營',
       icon: '🎭',
+      minCount: 0,
       maxCount: 1,
       order: 6,
       desc: '夜間可交換任意 2 位其他玩家的手牌（自己不能看牌內容）。'
+    },
+    drunk: {
+      id: 'drunk',
+      name: '酒鬼',
+      team: 'villager',
+      teamName: '村民陣營',
+      icon: '🍺',
+      minCount: 0,
+      maxCount: 1,
+      order: 7,
+      desc: '夜間必須將自己的身份牌與中央 1 張底牌盲換（不能看新牌）。'
     },
     insomniac: {
       id: 'insomniac',
@@ -117,8 +133,9 @@ const WerewolfModule = {
       team: 'villager',
       teamName: '村民陣營',
       icon: '🦉',
+      minCount: 0,
       maxCount: 1,
-      order: 7,
+      order: 8,
       desc: '在天亮前最後醒來，查看自己最後的身份牌，確認是否被換過。'
     },
     hunter: {
@@ -153,6 +170,7 @@ const WerewolfModule = {
       seer: 0,
       robber: 0,
       troublemaker: 0,
+      drunk: 0,
       insomniac: 0,
       hunter: 0,
       villager: 0
@@ -184,8 +202,8 @@ const WerewolfModule = {
       config.seer = 1;
       config.robber = 1;
       config.troublemaker = 1;
+      config.drunk = 1;
       config.insomniac = 1;
-      config.villager = 1;
     } else if (N === 5) {
       // 8 cards
       config.werewolf = 2;
@@ -193,8 +211,8 @@ const WerewolfModule = {
       config.seer = 1;
       config.robber = 1;
       config.troublemaker = 1;
+      config.drunk = 1;
       config.insomniac = 1;
-      config.hunter = 1;
     } else if (N === 6) {
       // 9 cards
       config.werewolf = 2;
@@ -203,7 +221,7 @@ const WerewolfModule = {
       config.seer = 1;
       config.robber = 1;
       config.troublemaker = 1;
-      config.insomniac = 1;
+      config.drunk = 1;
     } else if (N === 7) {
       // 10 cards
       config.werewolf = 2;
@@ -212,7 +230,7 @@ const WerewolfModule = {
       config.seer = 1;
       config.robber = 1;
       config.troublemaker = 1;
-      config.insomniac = 1;
+      config.drunk = 1;
       config.hunter = 1;
     } else if (N === 8) {
       // 11 cards
@@ -222,9 +240,9 @@ const WerewolfModule = {
       config.seer = 1;
       config.robber = 1;
       config.troublemaker = 1;
+      config.drunk = 1;
       config.insomniac = 1;
       config.hunter = 1;
-      config.villager = 1;
     } else if (N === 9) {
       // 12 cards
       config.werewolf = 2;
@@ -233,9 +251,10 @@ const WerewolfModule = {
       config.seer = 1;
       config.robber = 1;
       config.troublemaker = 1;
+      config.drunk = 1;
       config.insomniac = 1;
       config.hunter = 1;
-      config.villager = 2;
+      config.villager = 1;
     } else {
       // >= 10 players
       config.werewolf = 2;
@@ -244,9 +263,10 @@ const WerewolfModule = {
       config.seer = 1;
       config.robber = 1;
       config.troublemaker = 1;
+      config.drunk = 1;
       config.insomniac = 1;
       config.hunter = 1;
-      config.villager = Math.min(3, Math.max(1, N + 3 - 10));
+      config.villager = Math.min(3, Math.max(1, N + 3 - 11));
     }
 
     return config;
@@ -503,6 +523,9 @@ const WerewolfModule = {
         clearInterval(this._reactionTimer);
         this._reactionTimer = null;
       }
+      this.clearGameTimer();
+      this.state.gamePhase = 'lobby';
+      this.state.gameData = null;
       this.state.lastReactionTime = 0;
       this.state.currentView = 'lobby';
       this.state.roomId = '';
@@ -685,6 +708,60 @@ const WerewolfModule = {
             if (pingEl) pingEl.textContent = `${this.state.ping}ms`;
           }
           break;
+
+        case 'GAME_STARTED':
+          if (!this.state.isHost) {
+            this.state.gamePhase = 'deal';
+            this.state.gameData = {
+              initialCards: data.initialCards,
+              currentCards: { ...data.initialCards },
+              nightOrder: data.nightOrder,
+              myInitialRole: data.initialCards[this.state.myPlayerId],
+              myCurrentRole: data.initialCards[this.state.myPlayerId]
+            };
+            this.startDealingPhase(data.dealDuration || 10);
+          }
+          break;
+
+        case 'NIGHT_STEP':
+          if (!this.state.isHost) {
+            this.handleNightStep(data);
+          }
+          break;
+
+        case 'NIGHT_ACTION':
+          if (this.state.isHost) {
+            this.processNightAction(data);
+          }
+          break;
+
+        case 'DAY_STARTED':
+          if (!this.state.isHost) {
+            this.handleDayStarted(data);
+          }
+          break;
+
+        case 'VOTING_STARTED':
+          if (!this.state.isHost) {
+            this.handleVotingStarted(data);
+          }
+          break;
+
+        case 'VOTE_CAST':
+          if (this.state.isHost) {
+            this.handleVoteCast(data);
+          }
+          break;
+
+        case 'GAME_OVER':
+          if (!this.state.isHost) {
+            this.handleGameOver(data);
+          }
+          break;
+
+        case 'RESET_GAME':
+          this.handleResetGame();
+          break;
       }
     } catch (e) {
       console.error('[Werewolf] Error processing message:', e);
@@ -838,6 +915,9 @@ const WerewolfModule = {
   render() {
     this.init();
     if (this.state.currentView === 'room' && this.state.roomId) {
+      if (this.state.gamePhase && this.state.gamePhase !== 'lobby') {
+        return this.renderGameView();
+      }
       return this.renderRoomView();
     }
     return this.renderLobbyView();
@@ -961,6 +1041,11 @@ const WerewolfModule = {
   // View 2: Room Screen (Removed online count from room code card, accurate roster count)
   renderRoomView() {
     const isMeReady = this.state.isReady;
+    const isHost = this.state.isHost;
+    const playerCount = this.state.players.length || 1;
+    const targetCards = playerCount + 3;
+    const selectedCount = this.getSelectedRoleTotalCount();
+    const canStartGame = (selectedCount === targetCards);
     const allReady = this.state.players.length >= 2 && this.state.players.every(p => p.isReady);
     const now = Date.now();
     const elapsed = now - (this.state.lastReactionTime || 0);
@@ -1056,23 +1141,51 @@ const WerewolfModule = {
             </div>
           </div>
 
-          <!-- Primary Ready Button (In Flow, Never Covers Other UI) -->
-          <div>
-            <button 
-              id="room-ready-btn"
-              onclick="WerewolfModule.toggleReady()" 
-              class="tap-scale w-full py-4 rounded-2xl font-black text-sm shadow-xl flex items-center justify-center space-x-2 transition-all ${
-                isMeReady 
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30' 
-                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30'
-              }"
-            >
-              <i data-lucide="${isMeReady ? 'check-circle-2' : 'zap'}" class="w-5 h-5"></i>
-              <span>${isMeReady ? '已就緒 (點擊取消)' : '立即準備 (點擊就緒)'}</span>
-            </button>
+          <!-- Primary Actions (Host Start Game + Ready Button) -->
+          <div class="space-y-2.5" id="room-primary-actions-container">
+            ${this.renderPrimaryActionBtns()}
           </div>
         </div>
       </div>
+    `;
+  },
+
+  renderPrimaryActionBtns() {
+    const isMeReady = this.state.isReady;
+    const isHost = this.state.isHost;
+    const playerCount = this.state.players.length || 1;
+    const targetCards = playerCount + 3;
+    const selectedCount = this.getSelectedRoleTotalCount();
+    const canStartGame = (selectedCount === targetCards);
+
+    return `
+      ${isHost ? `
+        <button 
+          onclick="WerewolfModule.hostStartGame()"
+          class="tap-scale w-full py-4 rounded-2xl font-black text-sm shadow-xl flex items-center justify-center space-x-2 transition-all ${
+            canStartGame 
+              ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-indigo-600/30' 
+              : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-300 dark:border-slate-700 cursor-not-allowed'
+          }"
+        >
+          <i data-lucide="play" class="w-5 h-5"></i>
+          <span>🚀 開始遊戲 (發牌)</span>
+          ${!canStartGame ? `<span class="text-[10px] font-normal opacity-80">(需選 ${targetCards} 張，目前 ${selectedCount} 張)</span>` : ''}
+        </button>
+      ` : ''}
+
+      <button 
+        id="room-ready-btn"
+        onclick="WerewolfModule.toggleReady()" 
+        class="tap-scale w-full ${isHost ? 'py-3 text-xs' : 'py-4 text-sm'} rounded-2xl font-black shadow-xl flex items-center justify-center space-x-2 transition-all ${
+          isMeReady 
+            ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30' 
+            : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30'
+        }"
+      >
+        <i data-lucide="${isMeReady ? 'check-circle-2' : 'zap'}" class="${isHost ? 'w-4 h-4' : 'w-5 h-5'}"></i>
+        <span>${isMeReady ? '已就緒 (點擊取消)' : '立即準備 (點擊就緒)'}</span>
+      </button>
     `;
   },
 
@@ -1288,6 +1401,10 @@ const WerewolfModule = {
   // Synchronize entire room interface
   updateRoomUI() {
     if (this.state.currentView !== 'room') return;
+    if (this.state.gamePhase && this.state.gamePhase !== 'lobby') {
+      this.renderView();
+      return;
+    }
 
     // 1. Update player list cards
     const container = document.getElementById('players-list-container');
@@ -1330,8 +1447,1667 @@ const WerewolfModule = {
       hostControlEl.innerHTML = this.renderHostControls();
     }
 
+    // 8. Update primary action buttons (start game & ready) to reflect card count
+    const actionsEl = document.getElementById('room-primary-actions-container');
+    if (actionsEl) {
+      actionsEl.innerHTML = this.renderPrimaryActionBtns();
+    }
+
     if (window.lucide) lucide.createIcons();
+  },
+
+  // ==========================================
+  // GAME LOOP & STATE MACHINE METHODS
+  // ==========================================
+
+  clearGameTimer() {
+    if (this._gameInterval) {
+      clearInterval(this._gameInterval);
+      this._gameInterval = null;
+    }
+  },
+
+  getPlayerName(id) {
+    if (id === this.state.myPlayerId) return `${this.state.myPlayerName} (我)`;
+    const p = this.state.players.find(x => x.id === id);
+    return p ? p.name : '未知玩家';
+  },
+
+  getRoleDef(roleId) {
+    return this.ROLES[roleId] || { id: roleId, name: roleId || '未知', icon: '❓', team: 'villager', teamName: '村民陣營', desc: '' };
+  },
+
+  // 1. Host Starts the Game
+  hostStartGame() {
+    if (!this.state.isHost) {
+      App.showToast('只有房主可以開始遊戲！', 'warning');
+      return;
+    }
+
+    const playerCount = this.state.players.length;
+    if (playerCount < 1) {
+      App.showToast('房間內尚無玩家！', 'warning');
+      return;
+    }
+
+    const targetCards = playerCount + 3;
+    const currentCardsCount = this.getSelectedRoleTotalCount();
+    if (currentCardsCount !== targetCards) {
+      App.showToast(`卡牌總數目前為 ${currentCardsCount} 張，需為 ${targetCards} 張（${playerCount} 人 ＋ 3 底牌）！`, 'warning');
+      if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
+      return;
+    }
+
+    // Check if other players are ready
+    if (playerCount >= 2) {
+      const unreadyPlayers = this.state.players.filter(p => !p.isReady && p.id !== this.state.myPlayerId);
+      if (unreadyPlayers.length > 0) {
+        if (!confirm(`尚有 ${unreadyPlayers.length} 位玩家尚未準備（${unreadyPlayers.map(p => p.name).join('、')}），確定要直接發牌開始嗎？`)) {
+          return;
+        }
+      }
+    }
+
+    // Build and shuffle deck
+    const deck = [];
+    Object.entries(this.state.selectedRoles).forEach(([roleId, count]) => {
+      for (let i = 0; i < count; i++) {
+        deck.push(roleId);
+      }
+    });
+
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+
+    const initialCards = {};
+    const currentCards = {};
+    this.state.players.forEach((p, idx) => {
+      initialCards[p.id] = deck[idx];
+      currentCards[p.id] = deck[idx];
+    });
+
+    const centerCards = deck.slice(playerCount, playerCount + 3);
+    const initialCenterCards = [...centerCards];
+
+    const ORDERED_NIGHT_ROLES = ['werewolf', 'minion', 'mason', 'seer', 'robber', 'troublemaker', 'drunk', 'insomniac'];
+    const nightOrder = ORDERED_NIGHT_ROLES.filter(r => (this.state.selectedRoles[r] || 0) > 0);
+
+    this.state.gameData = {
+      initialCards: initialCards,
+      currentCards: currentCards,
+      centerCards: centerCards,
+      initialCenterCards: initialCenterCards,
+      nightOrder: nightOrder,
+      currentNightIndex: -1,
+      currentNightRole: null,
+      nightLogs: [],
+      votes: {},
+      myInitialRole: initialCards[this.state.myPlayerId],
+      myCurrentRole: initialCards[this.state.myPlayerId],
+      cardFlipped: false
+    };
+
+    if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
+
+    this.broadcast({
+      type: 'GAME_STARTED',
+      initialCards: initialCards,
+      nightOrder: nightOrder,
+      dealDuration: 10
+    });
+
+    this.startDealingPhase(10);
+  },
+
+  // 2. Dealing Phase (10s)
+  startDealingPhase(duration = 10) {
+    this.clearGameTimer();
+    this.state.gamePhase = 'deal';
+    if (!this.state.gameData) this.state.gameData = {};
+    this.state.gameData.phase = 'deal';
+    this.state.gameData.timerSeconds = duration;
+    this.state.gameData.cardFlipped = false;
+
+    if ('vibrate' in navigator) navigator.vibrate(50);
+    this.renderView();
+
+    this._gameInterval = setInterval(() => {
+      if (!this.state.gameData) {
+        this.clearGameTimer();
+        return;
+      }
+      this.state.gameData.timerSeconds--;
+      const timerEl = document.getElementById('game-phase-timer');
+      if (timerEl) {
+        timerEl.textContent = `${this.state.gameData.timerSeconds}s`;
+      }
+
+      if (this.state.gameData.timerSeconds <= 0) {
+        this.clearGameTimer();
+        if (this.state.isHost) {
+          this.startNightPhase();
+        }
+      }
+    }, 1000);
+  },
+
+  toggleFlipCard() {
+    if (!this.state.gameData) return;
+    this.state.gameData.cardFlipped = !this.state.gameData.cardFlipped;
+    if ('vibrate' in navigator) navigator.vibrate(20);
+    const cardEl = document.getElementById('identity-flip-card');
+    if (cardEl) {
+      cardEl.classList.toggle('card-flipped', this.state.gameData.cardFlipped);
+    }
+  },
+
+  lockCardView() {
+    if (!this.state.gameData) return;
+    this.state.gameData.cardFlipped = false;
+    if ('vibrate' in navigator) navigator.vibrate(25);
+    const cardEl = document.getElementById('identity-flip-card');
+    if (cardEl) {
+      cardEl.classList.remove('card-flipped');
+    }
+    App.showToast('已鎖定並隱藏身份牌 🔒', 'info');
+  },
+
+  // 3. Night Phase Sequence
+  startNightPhase() {
+    if (!this.state.isHost) return;
+    this.clearGameTimer();
+    this.state.gameData.currentNightIndex = 0;
+    this.runNightStep(0);
+  },
+
+  runNightStep(stepIndex) {
+    if (!this.state.isHost) return;
+    this.clearGameTimer();
+
+    const nightOrder = this.state.gameData.nightOrder || [];
+    if (stepIndex >= nightOrder.length) {
+      this.startDayPhase();
+      return;
+    }
+
+    const roleId = nightOrder[stepIndex];
+    this.state.gameData.currentNightIndex = stepIndex;
+    this.state.gameData.currentNightRole = roleId;
+
+    const payload = {
+      type: 'NIGHT_STEP',
+      roleId: roleId,
+      stepIndex: stepIndex,
+      totalSteps: nightOrder.length,
+      duration: 12
+    };
+
+    if (roleId === 'werewolf') {
+      payload.werewolfIds = Object.entries(this.state.gameData.initialCards)
+        .filter(([_, r]) => r === 'werewolf')
+        .map(([id]) => id);
+      if (payload.werewolfIds.length === 1) {
+        payload.centerCards = this.state.gameData.centerCards;
+      }
+    } else if (roleId === 'minion') {
+      payload.werewolfIds = Object.entries(this.state.gameData.initialCards)
+        .filter(([_, r]) => r === 'werewolf')
+        .map(([id]) => id);
+    } else if (roleId === 'mason') {
+      payload.masonIds = Object.entries(this.state.gameData.initialCards)
+        .filter(([_, r]) => r === 'mason')
+        .map(([id]) => id);
+    } else if (roleId === 'seer') {
+      payload.centerCards = this.state.gameData.centerCards;
+      payload.playerCards = { ...this.state.gameData.currentCards };
+    } else if (roleId === 'robber') {
+      payload.playerCards = { ...this.state.gameData.currentCards };
+    } else if (roleId === 'drunk') {
+      payload.centerCards = this.state.gameData.centerCards;
+    } else if (roleId === 'insomniac') {
+      const insomniacEntry = Object.entries(this.state.gameData.initialCards).find(([_, r]) => r === 'insomniac');
+      if (insomniacEntry) {
+        payload.insomniacFinalRole = this.state.gameData.currentCards[insomniacEntry[0]];
+      }
+    }
+
+    if (roleId === 'werewolf') {
+      const wolves = Object.entries(this.state.gameData.initialCards)
+        .filter(([_, r]) => r === 'werewolf')
+        .map(([id]) => this.getPlayerName(id));
+      if (wolves.length > 0) {
+        this.state.gameData.nightLogs.push(`🐺 狼人們（${wolves.join('、')}）睜眼確認了同伴`);
+      } else {
+        this.state.gameData.nightLogs.push(`🐺 狼人閉眼（所有狼人牌皆在底牌）`);
+      }
+    } else if (roleId === 'minion') {
+      this.state.gameData.nightLogs.push(`🦊 爪牙睜眼確認了狼人同伴名單`);
+    } else if (roleId === 'mason') {
+      this.state.gameData.nightLogs.push(`👮 守夜人們睜眼確認了同伴`);
+    }
+
+    this.broadcast(payload);
+    this.handleNightStep(payload);
+
+    this._gameInterval = setInterval(() => {
+      if (!this.state.gameData) {
+        this.clearGameTimer();
+        return;
+      }
+      this.state.gameData.timerSeconds--;
+      const timerEl = document.getElementById('game-phase-timer');
+      if (timerEl) {
+        timerEl.textContent = `${this.state.gameData.timerSeconds}s`;
+      }
+
+      if (this.state.gameData.timerSeconds <= 0) {
+        this.clearGameTimer();
+        if (this.state.isHost) {
+          this.runNightStep(stepIndex + 1);
+        }
+      }
+    }, 1000);
+  },
+
+  handleNightStep(data) {
+    this.clearGameTimer();
+    this.state.gamePhase = 'night';
+    if (!this.state.gameData) this.state.gameData = {};
+    this.state.gameData.phase = 'night';
+    this.state.gameData.currentNightRole = data.roleId;
+    this.state.gameData.currentNightIndex = data.stepIndex;
+    this.state.gameData.totalNightSteps = data.totalSteps;
+    this.state.gameData.timerSeconds = data.duration || 12;
+    this.state.gameData.hasActedThisNight = false;
+    this.state.gameData.actionResult = null;
+    this.state.gameData.stepHelperData = data;
+    this.state.gameData.troubleTargets = [];
+    this.state.gameData.seerCenterTargets = [];
+
+    const isMeActive = (this.state.gameData.myInitialRole === data.roleId);
+    if (isMeActive && 'vibrate' in navigator) {
+      navigator.vibrate([100, 50, 100]);
+    }
+
+    this.renderView();
+
+    if (!this.state.isHost) {
+      this._gameInterval = setInterval(() => {
+        if (!this.state.gameData) {
+          this.clearGameTimer();
+          return;
+        }
+        this.state.gameData.timerSeconds--;
+        const timerEl = document.getElementById('game-phase-timer');
+        if (timerEl) {
+          timerEl.textContent = `${this.state.gameData.timerSeconds}s`;
+        }
+        if (this.state.gameData.timerSeconds <= 0) {
+          this.clearGameTimer();
+        }
+      }, 1000);
+    }
+  },
+
+  executeNightAction(actionType, params = {}) {
+    if (!this.state.gameData) return;
+    this.state.gameData.hasActedThisNight = true;
+
+    const roleId = this.state.gameData.currentNightRole;
+    const payload = {
+      type: 'NIGHT_ACTION',
+      roleId: roleId,
+      actionType: actionType,
+      actorId: this.state.myPlayerId,
+      params: params
+    };
+
+    this.broadcast(payload);
+    if (this.state.isHost) {
+      this.processNightAction(payload);
+    }
+
+    if ('vibrate' in navigator) navigator.vibrate(30);
+    this.renderView();
+  },
+
+  processNightAction(payload) {
+    if (!this.state.isHost || !this.state.gameData) return;
+    const { roleId, actionType, actorId, params } = payload;
+    const actorName = this.getPlayerName(actorId);
+
+    if (roleId === 'seer') {
+      if (actionType === 'PEEK_PLAYER') {
+        const targetId = params.targetId;
+        const targetName = this.getPlayerName(targetId);
+        this.state.gameData.nightLogs.push(`🔮 預言家（${actorName}）查驗了玩家 ${targetName} 的手牌`);
+      } else if (actionType === 'PEEK_CENTER') {
+        const { idx1, idx2 } = params;
+        const cLabels = ['A', 'B', 'C'];
+        this.state.gameData.nightLogs.push(`🔮 預言家（${actorName}）查驗了中央底牌 ${cLabels[idx1]} 與 ${cLabels[idx2]}`);
+      }
+    } else if (roleId === 'werewolf' && actionType === 'LONE_WOLF_PEEK') {
+      const { idx } = params;
+      const cLabels = ['A', 'B', 'C'];
+      this.state.gameData.nightLogs.push(`🐺 孤狼（${actorName}）查驗了中央底牌 ${cLabels[idx]}`);
+    } else if (roleId === 'robber' && actionType === 'SWAP') {
+      const targetId = params.targetId;
+      const targetName = this.getPlayerName(targetId);
+      const myRole = this.state.gameData.currentCards[actorId];
+      const targetRole = this.state.gameData.currentCards[targetId];
+
+      this.state.gameData.currentCards[actorId] = targetRole;
+      this.state.gameData.currentCards[targetId] = myRole;
+
+      const newRoleDef = this.ROLES[targetRole];
+      this.state.gameData.nightLogs.push(`🥷 強盜（${actorName}）搶奪了 ${targetName} 的手牌，成為了 ${newRoleDef ? newRoleDef.name : targetRole}`);
+    } else if (roleId === 'troublemaker' && actionType === 'SWAP') {
+      const { t1, t2 } = params;
+      const name1 = this.getPlayerName(t1);
+      const name2 = this.getPlayerName(t2);
+      const role1 = this.state.gameData.currentCards[t1];
+      const role2 = this.state.gameData.currentCards[t2];
+
+      this.state.gameData.currentCards[t1] = role2;
+      this.state.gameData.currentCards[t2] = role1;
+
+      this.state.gameData.nightLogs.push(`🎭 搗蛋鬼（${actorName}）交換了 ${name1} 與 ${name2} 的手牌`);
+    } else if (roleId === 'drunk' && actionType === 'SWAP') {
+      const { centerIdx } = params;
+      const cLabels = ['A', 'B', 'C'];
+      const myRole = this.state.gameData.currentCards[actorId];
+      const centerRole = this.state.gameData.centerCards[centerIdx];
+
+      this.state.gameData.currentCards[actorId] = centerRole;
+      this.state.gameData.centerCards[centerIdx] = myRole;
+
+      this.state.gameData.nightLogs.push(`🍺 酒鬼（${actorName}）盲換了中央底牌 ${cLabels[centerIdx]}`);
+    } else if (roleId === 'insomniac') {
+      const finalRole = this.state.gameData.currentCards[actorId];
+      const finalRoleDef = this.ROLES[finalRole];
+      this.state.gameData.nightLogs.push(`🦉 失眠者（${actorName}）查看自己最終身份為 ${finalRoleDef ? finalRoleDef.name : finalRole}`);
+    }
+  },
+
+  // Action Helpers for Active Roles
+  loneWolfPeekCenter(idx) {
+    if (!this.state.gameData || this.state.gameData.hasActedThisNight) return;
+    const helperData = this.state.gameData.stepHelperData || {};
+    const role = (helperData.centerCards && helperData.centerCards[idx]) || 'villager';
+    this.state.gameData.actionResult = { type: 'lone_wolf', idx, role };
+    this.executeNightAction('LONE_WOLF_PEEK', { idx });
+  },
+
+  seerPeekPlayer(targetId) {
+    if (!this.state.gameData || this.state.gameData.hasActedThisNight) return;
+    const helperData = this.state.gameData.stepHelperData || {};
+    const role = (helperData.playerCards && helperData.playerCards[targetId]) || 'villager';
+    this.state.gameData.actionResult = { type: 'seer_player', targetName: this.getPlayerName(targetId), role };
+    this.executeNightAction('PEEK_PLAYER', { targetId });
+  },
+
+  toggleSeerCenterTarget(idx) {
+    if (!this.state.gameData || this.state.gameData.hasActedThisNight) return;
+    let list = this.state.gameData.seerCenterTargets || [];
+    if (list.includes(idx)) {
+      list = list.filter(i => i !== idx);
+    } else {
+      if (list.length < 2) list.push(idx);
+      else list = [list[1], idx];
+    }
+    this.state.gameData.seerCenterTargets = list;
+    if ('vibrate' in navigator) navigator.vibrate(15);
+    this.renderView();
+  },
+
+  seerConfirmCenterPeek() {
+    if (!this.state.gameData || this.state.gameData.hasActedThisNight) return;
+    const list = this.state.gameData.seerCenterTargets || [];
+    if (list.length !== 2) return;
+    const helperData = this.state.gameData.stepHelperData || {};
+    const [idx1, idx2] = list;
+    const r1 = (helperData.centerCards && helperData.centerCards[idx1]) || 'villager';
+    const r2 = (helperData.centerCards && helperData.centerCards[idx2]) || 'villager';
+    this.state.gameData.actionResult = { type: 'seer_center', idx1, idx2, role1: r1, role2: r2 };
+    this.executeNightAction('PEEK_CENTER', { idx1, idx2 });
+  },
+
+  robberSwap(targetId) {
+    if (!this.state.gameData || this.state.gameData.hasActedThisNight) return;
+    const helperData = this.state.gameData.stepHelperData || {};
+    const newRole = (helperData.playerCards && helperData.playerCards[targetId]) || 'villager';
+    this.state.gameData.myCurrentRole = newRole;
+    this.state.gameData.actionResult = { type: 'robber', targetName: this.getPlayerName(targetId), newRole };
+    this.executeNightAction('SWAP', { targetId });
+  },
+
+  toggleTroublemakerTarget(targetId) {
+    if (!this.state.gameData || this.state.gameData.hasActedThisNight) return;
+    let list = this.state.gameData.troubleTargets || [];
+    if (list.includes(targetId)) {
+      list = list.filter(id => id !== targetId);
+    } else {
+      if (list.length < 2) list.push(targetId);
+      else list = [list[1], targetId];
+    }
+    this.state.gameData.troubleTargets = list;
+    if ('vibrate' in navigator) navigator.vibrate(15);
+    this.renderView();
+  },
+
+  troublemakerConfirmSwap() {
+    if (!this.state.gameData || this.state.gameData.hasActedThisNight) return;
+    const list = this.state.gameData.troubleTargets || [];
+    if (list.length !== 2) return;
+    const [t1, t2] = list;
+    this.state.gameData.actionResult = { type: 'troublemaker', name1: this.getPlayerName(t1), name2: this.getPlayerName(t2) };
+    this.executeNightAction('SWAP', { t1, t2 });
+  },
+
+  drunkSwap(centerIdx) {
+    if (!this.state.gameData || this.state.gameData.hasActedThisNight) return;
+    this.state.gameData.actionResult = { type: 'drunk', centerIdx };
+    this.executeNightAction('SWAP', { centerIdx });
+  },
+
+  // 4. Day Phase
+  startDayPhase() {
+    if (!this.state.isHost) return;
+    this.clearGameTimer();
+    const duration = 180;
+
+    this.broadcast({
+      type: 'DAY_STARTED',
+      duration: duration
+    });
+
+    this.handleDayStarted({ duration: duration });
+  },
+
+  handleDayStarted(data) {
+    this.clearGameTimer();
+    this.state.gamePhase = 'day';
+    if (!this.state.gameData) this.state.gameData = {};
+    this.state.gameData.phase = 'day';
+    this.state.gameData.timerSeconds = data.duration || 180;
+
+    if ('vibrate' in navigator) navigator.vibrate([150, 100, 150]);
+    this.renderView();
+
+    this._gameInterval = setInterval(() => {
+      if (!this.state.gameData) {
+        this.clearGameTimer();
+        return;
+      }
+      this.state.gameData.timerSeconds--;
+      const timerEl = document.getElementById('game-phase-timer');
+      if (timerEl) {
+        const m = Math.floor(this.state.gameData.timerSeconds / 60);
+        const s = this.state.gameData.timerSeconds % 60;
+        timerEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      }
+
+      if (this.state.gameData.timerSeconds <= 0) {
+        this.clearGameTimer();
+        if (this.state.isHost) {
+          this.startVotingPhase();
+        }
+      }
+    }, 1000);
+  },
+
+  hostSkipDayDiscussion() {
+    if (!this.state.isHost) return;
+    if (confirm('確定要提早結束白日討論，直接進入投票處決階段嗎？')) {
+      this.startVotingPhase();
+    }
+  },
+
+  // 5. Voting Phase
+  startVotingPhase() {
+    if (!this.state.isHost) return;
+    this.clearGameTimer();
+    const duration = 15;
+
+    this.state.gameData.votes = {};
+
+    this.broadcast({
+      type: 'VOTING_STARTED',
+      duration: duration
+    });
+
+    this.handleVotingStarted({ duration: duration });
+  },
+
+  handleVotingStarted(data) {
+    this.clearGameTimer();
+    this.state.gamePhase = 'voting';
+    if (!this.state.gameData) this.state.gameData = {};
+    this.state.gameData.phase = 'voting';
+    this.state.gameData.timerSeconds = data.duration || 15;
+    this.state.gameData.selectedVoteTarget = null;
+    this.state.gameData.myVote = null;
+    this.state.gameData.hasVoted = false;
+
+    if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
+    this.renderView();
+
+    this._gameInterval = setInterval(() => {
+      if (!this.state.gameData) {
+        this.clearGameTimer();
+        return;
+      }
+      this.state.gameData.timerSeconds--;
+      const timerEl = document.getElementById('game-phase-timer');
+      if (timerEl) {
+        timerEl.textContent = `${this.state.gameData.timerSeconds}s`;
+      }
+
+      if (this.state.gameData.timerSeconds <= 0) {
+        this.clearGameTimer();
+        if (this.state.isHost) {
+          this.tallyVotesAndSettle();
+        }
+      }
+    }, 1000);
+  },
+
+  selectVoteTarget(targetId) {
+    if (!this.state.gameData || this.state.gameData.hasVoted) return;
+    this.state.gameData.selectedVoteTarget = targetId;
+    if ('vibrate' in navigator) navigator.vibrate(20);
+    this.renderView();
+  },
+
+  submitVote(targetPlayerId) {
+    if (!this.state.gameData || this.state.gameData.hasVoted) return;
+    this.state.gameData.myVote = targetPlayerId;
+    this.state.gameData.hasVoted = true;
+
+    const payload = {
+      type: 'VOTE_CAST',
+      voterId: this.state.myPlayerId,
+      targetId: targetPlayerId
+    };
+
+    this.broadcast(payload);
+
+    if (this.state.isHost) {
+      this.handleVoteCast(payload);
+    }
+
+    if ('vibrate' in navigator) navigator.vibrate(30);
+    App.showToast(`已投票給 ${this.getPlayerName(targetPlayerId)}！`, 'success');
+    this.renderView();
+  },
+
+  handleVoteCast(data) {
+    if (!this.state.isHost || !this.state.gameData) return;
+    if (!this.state.gameData.votes) this.state.gameData.votes = {};
+    this.state.gameData.votes[data.voterId] = data.targetId;
+
+    const totalVoted = Object.keys(this.state.gameData.votes).length;
+    if (totalVoted >= this.state.players.length) {
+      this.clearGameTimer();
+      this.tallyVotesAndSettle();
+    }
+  },
+
+  tallyVotesAndSettle() {
+    if (!this.state.isHost || !this.state.gameData) return;
+    this.clearGameTimer();
+
+    const votes = this.state.gameData.votes || {};
+    const voteCounts = {};
+    this.state.players.forEach(p => { voteCounts[p.id] = 0; });
+
+    Object.values(votes).forEach(targetId => {
+      if (voteCounts[targetId] !== undefined) {
+        voteCounts[targetId]++;
+      }
+    });
+
+    const maxVotes = Math.max(0, ...Object.values(voteCounts));
+    let executedPlayers = [];
+
+    if (maxVotes >= 2) {
+      executedPlayers = this.state.players
+        .filter(p => voteCounts[p.id] === maxVotes)
+        .map(p => p.id);
+
+      const hunterVictims = [];
+      executedPlayers.forEach(pId => {
+        if (this.state.gameData.currentCards[pId] === 'hunter') {
+          const huntedTarget = votes[pId];
+          if (huntedTarget && !executedPlayers.includes(huntedTarget)) {
+            hunterVictims.push(huntedTarget);
+            const hName = this.getPlayerName(pId);
+            const tName = this.getPlayerName(huntedTarget);
+            this.state.gameData.nightLogs.push(`🏹 獵人（${hName}）被處決，發動技能帶走了 ${tName}！`);
+          }
+        }
+      });
+      executedPlayers = [...executedPlayers, ...hunterVictims];
+    }
+
+    let winningTeam = 'villager';
+    let winReason = '';
+
+    const anyWolfExecuted = executedPlayers.some(pId => this.state.gameData.currentCards[pId] === 'werewolf');
+    const liveWolvesExist = Object.values(this.state.gameData.currentCards).some(r => r === 'werewolf');
+
+    if (anyWolfExecuted) {
+      winningTeam = 'villager';
+      winReason = '處決名單中包含狼人！村民陣營獲勝 🎉';
+    } else {
+      if (executedPlayers.length > 0) {
+        winningTeam = 'werewolf';
+        winReason = '處決的皆為好人，狼人成功隱匿獲勝 🐺';
+      } else {
+        if (liveWolvesExist) {
+          winningTeam = 'werewolf';
+          winReason = '平安夜無人傷亡，但場上有狼人存活！狼人獲勝 🐺';
+        } else {
+          winningTeam = 'villager';
+          winReason = '平安夜無人傷亡，且場上無狼人（狼全在底牌）！好人成功識破獲勝 🎉';
+        }
+      }
+    }
+
+    const payload = {
+      type: 'GAME_OVER',
+      initialCards: this.state.gameData.initialCards,
+      finalCards: this.state.gameData.currentCards,
+      centerCards: this.state.gameData.centerCards,
+      initialCenterCards: this.state.gameData.initialCenterCards,
+      votes: votes,
+      voteCounts: voteCounts,
+      executedPlayers: executedPlayers,
+      winningTeam: winningTeam,
+      winReason: winReason,
+      nightLogs: this.state.gameData.nightLogs
+    };
+
+    this.broadcast(payload);
+    this.handleGameOver(payload);
+  },
+
+  handleGameOver(data) {
+    this.clearGameTimer();
+    this.state.gamePhase = 'result';
+    this.state.gameData = {
+      ...this.state.gameData,
+      ...data,
+      phase: 'result'
+    };
+
+    if ('vibrate' in navigator) {
+      if (data.winningTeam === 'villager') {
+        navigator.vibrate([100, 50, 100, 50, 200]);
+      } else {
+        navigator.vibrate([300, 100, 300]);
+      }
+    }
+
+    this.renderView();
+  },
+
+  hostRestartGame() {
+    if (!this.state.isHost) return;
+    this.broadcast({ type: 'RESET_GAME' });
+    this.handleResetGame();
+  },
+
+  handleResetGame() {
+    this.clearGameTimer();
+    this.state.gamePhase = 'lobby';
+    this.state.gameData = null;
+    this.state.isReady = false;
+    this.state.players.forEach(p => p.isReady = false);
+    App.showToast('已重置回到房間大廳！', 'info');
+    this.renderView();
+  },
+
+  // ==========================================
+  // GAME PHASES RENDERERS
+  // ==========================================
+
+  renderGameView() {
+    const phase = this.state.gamePhase;
+    if (phase === 'deal') return this.renderDealPhase();
+    if (phase === 'night') return this.renderNightPhase();
+    if (phase === 'day') return this.renderDayPhase();
+    if (phase === 'voting') return this.renderVotingPhase();
+    if (phase === 'result') return this.renderResultPhase();
+    return this.renderRoomView();
+  },
+
+  // View: Dealing Phase
+  renderDealPhase() {
+    const roleId = this.state.gameData?.myInitialRole;
+    const roleDef = this.getRoleDef(roleId);
+    const timerVal = this.state.gameData?.timerSeconds ?? 10;
+    const isFlipped = this.state.gameData?.cardFlipped || false;
+
+    return `
+      <div class="relative space-y-4 fade-in pb-16">
+        <!-- Floating Reactions Container -->
+        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
+
+        <!-- Top Header & Timer -->
+        <div class="flex items-center justify-between pt-1">
+          <button onclick="WerewolfModule.leaveRoom()" class="flex items-center space-x-1 text-xs font-bold text-red-500 hover:text-red-600 tap-scale">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+            <span>退出</span>
+          </button>
+
+          <div class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 text-xs font-black text-indigo-600 dark:text-indigo-400">
+            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+            <span id="game-phase-timer">${timerVal}s</span>
+          </div>
+        </div>
+
+        <!-- Hero Header -->
+        <div class="text-center space-y-1">
+          <span class="inline-block text-xs uppercase font-extrabold tracking-wider px-2.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300">
+            第一階段：確認身份
+          </span>
+          <h2 class="text-lg font-black text-slate-900 dark:text-white">點擊卡牌翻面查看</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400">確認身份後請翻回背面，避免身旁好友偷看！</p>
+        </div>
+
+        <!-- 3D Flip Card Container -->
+        <div class="flex flex-col items-center justify-center py-4">
+          <div 
+            id="identity-flip-card"
+            onclick="WerewolfModule.toggleFlipCard()"
+            class="w-64 h-96 perspective-1000 cursor-pointer tap-scale transition-transform select-none ${isFlipped ? 'card-flipped' : ''}"
+          >
+            <div class="card-flip-inner relative w-full h-full duration-500 rounded-3xl shadow-2xl">
+              <!-- Card Front: Face Down -->
+              <div class="backface-hidden absolute inset-0 w-full h-full rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 border-2 border-indigo-500/40 p-6 flex flex-col items-center justify-between text-white shadow-2xl">
+                <div class="flex items-center justify-between w-full opacity-60 text-xs font-mono">
+                  <span>ONUW</span>
+                  <span>#${this.state.roomId}</span>
+                </div>
+
+                <div class="text-center space-y-3">
+                  <div class="w-24 h-24 mx-auto rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-5xl shadow-inner night-glow">
+                    🌙
+                  </div>
+                  <p class="text-sm font-bold tracking-wider text-indigo-200">點擊卡牌翻開查看</p>
+                  <p class="text-[11px] text-slate-400 leading-tight">記住您的身份與技能<br/>倒數結束後將進入夜晚閉眼</p>
+                </div>
+
+                <div class="w-full text-center">
+                  <span class="inline-block text-[10px] bg-white/10 px-3 py-1 rounded-full text-indigo-300">
+                    點擊翻面 🔄
+                  </span>
+                </div>
+              </div>
+
+              <!-- Card Back: Face Up (Revealed Role) -->
+              <div class="backface-hidden rotate-y-180 absolute inset-0 w-full h-full rounded-3xl ${
+                roleDef.team === 'werewolf' 
+                  ? 'bg-gradient-to-br from-slate-900 via-rose-950 to-slate-950 border-2 border-rose-500/60 text-rose-100 shadow-rose-950/50' 
+                  : 'bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 border-2 border-indigo-500/60 text-indigo-100 shadow-indigo-950/50'
+              } p-6 flex flex-col items-center justify-between shadow-2xl">
+                <div class="flex items-center justify-between w-full">
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    roleDef.team === 'werewolf' ? 'bg-rose-500/30 text-rose-300' : 'bg-indigo-500/30 text-indigo-300'
+                  }">
+                    ${roleDef.teamName}
+                  </span>
+                  <span class="text-xs font-mono text-slate-400">#${this.state.roomId}</span>
+                </div>
+
+                <div class="text-center space-y-2">
+                  <div class="text-6xl animate-bounce">${roleDef.icon}</div>
+                  <h3 class="text-2xl font-black text-white">${roleDef.name}</h3>
+                  <p class="text-xs leading-relaxed ${roleDef.team === 'werewolf' ? 'text-rose-200/90' : 'text-indigo-200/90'} max-w-[210px] mx-auto">
+                    ${roleDef.desc}
+                  </p>
+                </div>
+
+                <div class="w-full text-center">
+                  <span class="text-[10px] text-slate-400">點擊任意處翻回背面隱藏</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lock Button -->
+        <div>
+          <button 
+            onclick="WerewolfModule.lockCardView()" 
+            class="tap-scale w-full py-3.5 rounded-2xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold text-xs border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center space-x-1.5"
+          >
+            <i data-lucide="eye-off" class="w-4 h-4 text-slate-500"></i>
+            <span>我已記住身份 (翻回背面鎖定)</span>
+          </button>
+        </div>
+      </div>
+    `;
+  },
+
+  // View: Night Phase
+  renderNightPhase() {
+    const currentRole = this.state.gameData?.currentNightRole;
+    const roleDef = this.getRoleDef(currentRole);
+    const stepIdx = (this.state.gameData?.currentNightIndex || 0) + 1;
+    const totalSteps = this.state.gameData?.totalNightSteps || (this.state.gameData?.nightOrder?.length || 1);
+    const timerVal = this.state.gameData?.timerSeconds ?? 12;
+
+    const myInitialRole = this.state.gameData?.myInitialRole;
+    const isMeActive = (myInitialRole === currentRole);
+    const helperData = this.state.gameData?.stepHelperData || {};
+    const hasActed = this.state.gameData?.hasActedThisNight || false;
+    const actionResult = this.state.gameData?.actionResult;
+
+    return `
+      <div class="relative space-y-4 fade-in pb-16">
+        <!-- Floating Reactions Container -->
+        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
+
+        <!-- Header Bar -->
+        <div class="flex items-center justify-between pt-1">
+          <div class="flex items-center space-x-2">
+            <span class="text-xl">🌙</span>
+            <div>
+              <h2 class="text-xs font-black text-slate-900 dark:text-white">第二階段：夜間行動</h2>
+              <p class="text-[10px] text-slate-400">輪次 ${stepIdx} / ${totalSteps}</p>
+            </div>
+          </div>
+
+          <div class="flex items-center space-x-1.5 px-3 py-1 rounded-full ${
+            isMeActive 
+              ? 'bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 animate-pulse' 
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+          } text-xs font-black">
+            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+            <span id="game-phase-timer">${timerVal}s</span>
+          </div>
+        </div>
+
+        ${isMeActive ? `
+          <!-- ACTIVE PLAYER VIEW -->
+          <div class="rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-5 text-white border-2 border-indigo-500/80 shadow-2xl shadow-indigo-950/60 space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-extrabold text-[10px] border border-amber-500/40">
+                🌟 輪到你的回合醒來！
+              </span>
+              <span class="text-2xl">${roleDef.icon}</span>
+            </div>
+
+            <div>
+              <h3 class="text-xl font-black">${roleDef.name} 請行動</h3>
+              <p class="text-xs text-indigo-200 mt-1">${roleDef.desc}</p>
+            </div>
+
+            <!-- Role Specific Action Component -->
+            <div class="bg-black/40 rounded-2xl p-4 border border-white/10 space-y-3">
+              ${this.renderActiveRoleActionContent(currentRole, helperData, hasActed, actionResult)}
+            </div>
+
+            ${hasActed ? `
+              <div class="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold text-center flex items-center justify-center space-x-1.5">
+                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                <span>行動已完成，請靜候夜晚結束...</span>
+              </div>
+            ` : ''}
+          </div>
+        ` : `
+          <!-- SLEEPING PLAYERS VIEW (DARK AMBIENT) -->
+          <div class="rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-6 text-white border border-slate-800 shadow-2xl flex flex-col items-center justify-center text-center py-12 space-y-4">
+            <div class="w-24 h-24 rounded-full bg-indigo-950/60 border border-indigo-800/40 flex items-center justify-center text-5xl shadow-2xl night-glow">
+              😴
+            </div>
+
+            <div class="space-y-1">
+              <h3 class="text-lg font-black tracking-wide text-slate-100">所有玩家請閉上雙眼</h3>
+              <p class="text-xs text-indigo-300">目前輪次：<strong class="text-amber-400 font-bold">${roleDef.icon} ${roleDef.name}</strong> 正在行動中</p>
+            </div>
+
+            <div class="p-3 rounded-2xl bg-white/5 border border-white/10 max-w-xs text-[11px] text-slate-400 leading-relaxed">
+              請保持絕對安靜，不要發出聲響、移動身體或晃動手機，等待所有人行動完成。
+            </div>
+          </div>
+        `}
+      </div>
+    `;
+  },
+
+  renderActiveRoleActionContent(roleId, helperData, hasActed, actionResult) {
+    const cLabels = ['底牌 A', '底牌 B', '底牌 C'];
+
+    if (roleId === 'werewolf') {
+      const wolfIds = helperData.werewolfIds || [];
+      const otherWolves = wolfIds.filter(id => id !== this.state.myPlayerId);
+
+      if (otherWolves.length > 0) {
+        return `
+          <p class="text-xs font-bold text-slate-200">🐺 你的同伴狼人為：</p>
+          <div class="flex flex-wrap gap-2 pt-1">
+            ${otherWolves.map(id => `
+              <span class="px-3 py-1.5 rounded-xl bg-rose-500/30 border border-rose-500/50 text-rose-200 font-bold text-xs flex items-center space-x-1">
+                <span>🐺</span>
+                <span>${this.getPlayerName(id)}</span>
+              </span>
+            `).join('')}
+          </div>
+          <p class="text-[11px] text-slate-400 mt-2">天亮後請互相掩護，誤導村民！</p>
+        `;
+      } else {
+        // Solitary Wolf
+        return `
+          <div class="space-y-2">
+            <p class="text-xs font-bold text-rose-300">你是場上唯一的孤狼！可查驗 1 張中央底牌：</p>
+            <div class="grid grid-cols-3 gap-2 pt-1">
+              ${[0, 1, 2].map(idx => {
+                const isChosen = actionResult && actionResult.type === 'lone_wolf' && actionResult.idx === idx;
+                const rDef = isChosen ? this.getRoleDef(actionResult.role) : null;
+                return `
+                  <button 
+                    onclick="WerewolfModule.loneWolfPeekCenter(${idx})"
+                    ${hasActed ? 'disabled' : ''}
+                    class="tap-scale p-3 rounded-2xl border text-center transition-all ${
+                      isChosen 
+                        ? 'bg-rose-950/90 border-rose-500 text-rose-100 shadow-md' 
+                        : 'bg-slate-800/80 hover:bg-slate-700 border-slate-700 text-slate-300'
+                    }"
+                  >
+                    <div class="text-2xl mb-1">${isChosen ? rDef.icon : '🎴'}</div>
+                    <div class="text-[11px] font-bold">${isChosen ? rDef.name : cLabels[idx]}</div>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+            ${actionResult && actionResult.type === 'lone_wolf' ? `
+              <div class="p-2.5 rounded-xl bg-rose-950/60 border border-rose-800 text-[11px] text-rose-200">
+                查驗結果：${cLabels[actionResult.idx]} 為 <strong>${this.getRoleDef(actionResult.role).name}</strong>！
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }
+    } else if (roleId === 'minion') {
+      const wolfIds = helperData.werewolfIds || [];
+      return `
+        <div class="space-y-2">
+          <p class="text-xs font-bold text-slate-200">🦊 爪牙請看：場上的狼人玩家為：</p>
+          ${wolfIds.length > 0 ? `
+            <div class="flex flex-wrap gap-2 pt-1">
+              ${wolfIds.map(id => `
+                <span class="px-3 py-1.5 rounded-xl bg-rose-500/30 border border-rose-500/50 text-rose-200 font-bold text-xs flex items-center space-x-1">
+                  <span>🐺</span>
+                  <span>${this.getPlayerName(id)}</span>
+                </span>
+              `).join('')}
+            </div>
+            <p class="text-[11px] text-slate-400">狼人不知道你是誰，請在白天保護狼人並混淆好人視聽！</p>
+          ` : `
+            <p class="text-xs text-amber-300 font-bold">場上沒有任何狼人！（所有狼人都在中央底牌）</p>
+            <p class="text-[11px] text-slate-400">只要白天無人被處決，或你存活下來，狼人陣營即獲勝！</p>
+          `}
+        </div>
+      `;
+    } else if (roleId === 'mason') {
+      const masonIds = helperData.masonIds || [];
+      const otherMasons = masonIds.filter(id => id !== this.state.myPlayerId);
+      return `
+        <div class="space-y-2">
+          <p class="text-xs font-bold text-slate-200">👮 守夜人同伴：</p>
+          ${otherMasons.length > 0 ? `
+            <div class="flex flex-wrap gap-2 pt-1">
+              ${otherMasons.map(id => `
+                <span class="px-3 py-1.5 rounded-xl bg-indigo-500/30 border border-indigo-500/50 text-indigo-200 font-bold text-xs">
+                  👮 ${this.getPlayerName(id)}
+                </span>
+              `).join('')}
+            </div>
+            <p class="text-[11px] text-slate-400">對方是鐵好人同伴，白天可以互信配合！</p>
+          ` : `
+            <p class="text-xs text-slate-300">沒有其他守夜人（另一張牌在中央底牌中）。</p>
+          `}
+        </div>
+      `;
+    } else if (roleId === 'seer') {
+      if (hasActed && actionResult) {
+        if (actionResult.type === 'seer_player') {
+          const rDef = this.getRoleDef(actionResult.role);
+          return `
+            <div class="p-3 rounded-2xl bg-indigo-950/80 border border-indigo-500 space-y-1">
+              <span class="text-[10px] uppercase font-bold text-indigo-300">查驗玩家結果</span>
+              <p class="text-xs font-bold text-white">
+                玩家 <strong>${actionResult.targetName}</strong> 的手牌為：<br/>
+                <span class="text-lg text-amber-400 inline-block mt-1">${rDef.icon} ${rDef.name}</span>
+                <span class="text-[11px] text-indigo-200">(${rDef.teamName})</span>
+              </p>
+            </div>
+          `;
+        } else if (actionResult.type === 'seer_center') {
+          const r1 = this.getRoleDef(actionResult.role1);
+          const r2 = this.getRoleDef(actionResult.role2);
+          return `
+            <div class="p-3 rounded-2xl bg-indigo-950/80 border border-indigo-500 space-y-2">
+              <span class="text-[10px] uppercase font-bold text-indigo-300">查驗底牌結果</span>
+              <div class="grid grid-cols-2 gap-2 text-xs font-bold">
+                <div class="p-2 rounded-xl bg-black/40 text-center">
+                  <div class="text-xl">${r1.icon}</div>
+                  <div class="text-slate-300">${cLabels[actionResult.idx1]}</div>
+                  <div class="text-white">${r1.name}</div>
+                </div>
+                <div class="p-2 rounded-xl bg-black/40 text-center">
+                  <div class="text-xl">${r2.icon}</div>
+                  <div class="text-slate-300">${cLabels[actionResult.idx2]}</div>
+                  <div class="text-white">${r2.name}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      const otherPlayers = this.state.players.filter(p => p.id !== this.state.myPlayerId);
+      const seerCenterTargets = this.state.gameData?.seerCenterTargets || [];
+
+      return `
+        <div class="space-y-3">
+          <div>
+            <p class="text-xs font-bold text-indigo-200">方式一：查驗 1 位玩家手牌</p>
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              ${otherPlayers.length > 0 ? otherPlayers.map(p => `
+                <button 
+                  onclick="WerewolfModule.seerPeekPlayer('${p.id}')"
+                  class="tap-scale p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 text-left flex items-center space-x-1.5"
+                >
+                  <span>👤</span>
+                  <span class="truncate">${p.name}</span>
+                </button>
+              `).join('') : `<div class="text-[11px] text-slate-500 col-span-2">尚無其他玩家</div>`}
+            </div>
+          </div>
+
+          <div class="pt-2 border-t border-white/10">
+            <p class="text-xs font-bold text-indigo-200">方式二：查驗中央 2 張底牌</p>
+            <div class="grid grid-cols-3 gap-2 pt-1">
+              ${[0, 1, 2].map(idx => {
+                const isSelected = seerCenterTargets.includes(idx);
+                return `
+                  <button 
+                    onclick="WerewolfModule.toggleSeerCenterTarget(${idx})"
+                    class="tap-scale p-2.5 rounded-xl border text-center transition-all ${
+                      isSelected 
+                        ? 'bg-indigo-600 border-indigo-400 text-white' 
+                        : 'bg-slate-800 border-slate-700 text-slate-300'
+                    }"
+                  >
+                    <div class="text-xs font-bold">${cLabels[idx]}</div>
+                    <div class="text-[10px] text-slate-400">${isSelected ? '✓ 已選' : '點選'}</div>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+            ${seerCenterTargets.length === 2 ? `
+              <button 
+                onclick="WerewolfModule.seerConfirmCenterPeek()"
+                class="tap-scale w-full mt-2 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs shadow-md"
+              >
+                確認查驗這 2 張底牌
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    } else if (roleId === 'robber') {
+      if (hasActed && actionResult) {
+        const newDef = this.getRoleDef(actionResult.newRole);
+        return `
+          <div class="p-3 rounded-2xl bg-indigo-950/80 border border-indigo-500 space-y-2 text-center">
+            <span class="text-[10px] uppercase font-bold text-indigo-300">搶奪交換成功</span>
+            <p class="text-xs text-slate-200">你已搶奪了 <strong>${actionResult.targetName}</strong> 的手牌！</p>
+            <div class="p-3 rounded-xl bg-black/40 inline-block px-6">
+              <div class="text-4xl">${newDef.icon}</div>
+              <div class="text-base font-black text-white mt-1">${newDef.name}</div>
+              <div class="text-[10px] text-indigo-300 font-bold">${newDef.teamName}</div>
+            </div>
+            <p class="text-[11px] text-amber-300 font-bold">你現在屬於此新陣營，白天請依照新身份獲勝！</p>
+          </div>
+        `;
+      }
+
+      const otherPlayers = this.state.players.filter(p => p.id !== this.state.myPlayerId);
+      return `
+        <div class="space-y-2">
+          <p class="text-xs font-bold text-indigo-200">選擇 1 位玩家交換手牌（並查看新身份）：</p>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            ${otherPlayers.length > 0 ? otherPlayers.map(p => `
+              <button 
+                onclick="WerewolfModule.robberSwap('${p.id}')"
+                class="tap-scale p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 text-left flex items-center space-x-1.5"
+              >
+                <span>🥷</span>
+                <span class="truncate">${p.name}</span>
+              </button>
+            `).join('') : `<div class="text-[11px] text-slate-500 col-span-2">尚無其他玩家可交換</div>`}
+          </div>
+        </div>
+      `;
+    } else if (roleId === 'troublemaker') {
+      if (hasActed && actionResult) {
+        return `
+          <div class="p-3 rounded-2xl bg-indigo-950/80 border border-indigo-500 space-y-1 text-center">
+            <span class="text-[10px] uppercase font-bold text-indigo-300">交換成功</span>
+            <p class="text-xs font-bold text-white">
+              已成功交換 <strong>${actionResult.name1}</strong> 與 <strong>${actionResult.name2}</strong> 的手牌！
+            </p>
+            <p class="text-[10px] text-slate-400 mt-1">（你不會得知他們各自的新牌內容）</p>
+          </div>
+        `;
+      }
+
+      const otherPlayers = this.state.players.filter(p => p.id !== this.state.myPlayerId);
+      const troubleTargets = this.state.gameData?.troubleTargets || [];
+
+      return `
+        <div class="space-y-2">
+          <p class="text-xs font-bold text-indigo-200">選擇任意 2 位其他玩家交換手牌（自己不看內容）：</p>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            ${otherPlayers.length >= 2 ? otherPlayers.map(p => {
+              const isSelected = troubleTargets.includes(p.id);
+              return `
+                <button 
+                  onclick="WerewolfModule.toggleTroublemakerTarget('${p.id}')"
+                  class="tap-scale p-2.5 rounded-xl border text-xs font-bold transition-all ${
+                    isSelected 
+                      ? 'bg-indigo-600 border-indigo-400 text-white' 
+                      : 'bg-slate-800 border-slate-700 text-slate-300'
+                  }"
+                >
+                  <span class="truncate">${p.name}</span>
+                  <span class="text-[10px] block opacity-70">${isSelected ? '✓ 已選' : '點選'}</span>
+                </button>
+              `;
+            }).join('') : `<div class="text-[11px] text-slate-500 col-span-2">需至少 2 位其他玩家</div>`}
+          </div>
+
+          ${troubleTargets.length === 2 ? `
+            <button 
+              onclick="WerewolfModule.troublemakerConfirmSwap()"
+              class="tap-scale w-full mt-2 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs shadow-md"
+            >
+              確認交換這 2 位玩家手牌
+            </button>
+          ` : `
+            <p class="text-[10px] text-slate-400 text-center">已選擇 ${troubleTargets.length} / 2 位玩家</p>
+          `}
+        </div>
+      `;
+    } else if (roleId === 'drunk') {
+      if (hasActed && actionResult) {
+        return `
+          <div class="p-3 rounded-2xl bg-indigo-950/80 border border-indigo-500 space-y-1 text-center">
+            <span class="text-[10px] uppercase font-bold text-indigo-300">盲換完成</span>
+            <p class="text-xs font-bold text-white">
+              🍺 你已將自己的手牌與 <strong>${cLabels[actionResult.centerIdx]}</strong> 盲換！
+            </p>
+            <p class="text-[11px] text-amber-300 mt-1">你現在完全不知道自己是誰，白天請多方觀察推理！</p>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="space-y-2">
+          <p class="text-xs font-bold text-indigo-200">酒醉恍惚！請選擇中央 1 張底牌盲換（不能看內容）：</p>
+          <div class="grid grid-cols-3 gap-2 pt-1">
+            ${[0, 1, 2].map(idx => `
+              <button 
+                onclick="WerewolfModule.drunkSwap(${idx})"
+                class="tap-scale p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-center text-slate-200"
+              >
+                <div class="text-2xl mb-1">🍺</div>
+                <div class="text-xs font-bold">${cLabels[idx]}</div>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else if (roleId === 'insomniac') {
+      const finalRole = helperData.insomniacFinalRole || this.state.gameData?.myCurrentRole || 'insomniac';
+      const finalDef = this.getRoleDef(finalRole);
+      const wasSwapped = (finalRole !== 'insomniac');
+
+      return `
+        <div class="p-3.5 rounded-2xl bg-indigo-950/80 border border-indigo-500 space-y-2 text-center">
+          <span class="text-[10px] uppercase font-bold text-indigo-300">天亮前最後確認</span>
+          <p class="text-xs text-slate-200">你醒來查看自己目前的最終手牌：</p>
+          <div class="p-3 rounded-2xl bg-black/40 inline-block px-8">
+            <div class="text-5xl">${finalDef.icon}</div>
+            <div class="text-lg font-black text-white mt-1">${finalDef.name}</div>
+            <div class="text-[10px] text-indigo-300 font-bold">${finalDef.teamName}</div>
+          </div>
+          ${wasSwapped ? `
+            <p class="text-xs text-amber-300 font-bold">⚠️ 你的手牌已被強盜或搗蛋鬼調換過！</p>
+          ` : `
+            <p class="text-xs text-emerald-400 font-bold">✓ 你的手牌依然是失眠者，整晚未被更換。</p>
+          `}
+        </div>
+      `;
+    }
+
+    return `<div class="text-xs text-slate-400">閉眼睡覺中...</div>`;
+  },
+
+  // View: Day Discussion Phase
+  renderDayPhase() {
+    const timerSec = this.state.gameData?.timerSeconds ?? 180;
+    const m = Math.floor(timerSec / 60);
+    const s = timerSec % 60;
+    const timerStr = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    const isHost = this.state.isHost;
+
+    const now = Date.now();
+    const elapsed = now - (this.state.lastReactionTime || 0);
+    const isCoolingDown = elapsed < 10000;
+    const remainingSec = isCoolingDown ? Math.ceil((10000 - elapsed) / 1000) : 0;
+
+    return `
+      <div class="relative space-y-4 fade-in pb-20">
+        <!-- Floating Reactions Container -->
+        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
+
+        <!-- Header -->
+        <div class="flex items-center justify-between pt-1">
+          <button onclick="WerewolfModule.leaveRoom()" class="flex items-center space-x-1 text-xs font-bold text-red-500 hover:text-red-600 tap-scale">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+            <span>退出</span>
+          </button>
+
+          <div class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-xs font-black text-amber-600 dark:text-amber-400">
+            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+            <span id="game-phase-timer">${timerStr}</span>
+          </div>
+        </div>
+
+        <!-- Sunrise Hero Banner -->
+        <div class="rounded-3xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 p-5 text-white shadow-xl shadow-amber-500/20 space-y-1">
+          <div class="flex items-center space-x-2 text-amber-100 text-[10px] font-bold uppercase tracking-wider">
+            <span>☀️</span>
+            <span>第三階段：白日自由辯論</span>
+          </div>
+          <h2 class="text-2xl font-black text-white">天亮了！全體睜眼！</h2>
+          <p class="text-xs text-amber-100 leading-relaxed">
+            自由發言與邏輯推理，找出誰在夜裡調換了卡牌，並揪出潛伏的狼人！
+          </p>
+        </div>
+
+        <!-- Living Players Grid -->
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 flex items-center space-x-1">
+              <i data-lucide="users" class="w-4 h-4 text-indigo-500"></i>
+              <span>場上存活玩家 (${this.state.players.length})</span>
+            </span>
+            <span class="text-[10px] font-bold text-emerald-500">全部在場</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            ${this.state.players.map(p => `
+              <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex items-center space-x-2.5">
+                <div class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                  ${p.name.charAt(0).toUpperCase()}
+                </div>
+                <div class="truncate">
+                  <div class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">${p.name}</div>
+                  <div class="text-[10px] text-slate-400">${p.id === this.state.myPlayerId ? '你本人' : '辯論發言中'}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Deduction Tips -->
+        <div class="rounded-2xl p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/40 space-y-1.5">
+          <p class="text-xs font-bold text-indigo-700 dark:text-indigo-300">💡 辯論提示與技巧：</p>
+          <ul class="text-[11px] text-slate-600 dark:text-slate-400 space-y-1 leading-relaxed">
+            <li>• 預言家可主動跳出告知查驗結果，建立邏輯基石。</li>
+            <li>• 強盜與搗蛋鬼可選擇何時誠實說出調換對象。</li>
+            <li>• 狼人可偽裝成好人製造混亂，留意發言是否有時間矛盾！</li>
+          </ul>
+        </div>
+
+        <!-- Quick Reactions in Discussion -->
+        <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-3 border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
+          <div class="flex items-center justify-between px-1">
+            <span class="text-[11px] font-bold text-slate-600 dark:text-slate-300">發言表情互動</span>
+            <span class="text-[10px] text-slate-400">點擊傳送</span>
+          </div>
+          <div class="flex items-center justify-around py-0.5">
+            <button onclick="WerewolfModule.sendReaction('🐺')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">🐺</button>
+            <button onclick="WerewolfModule.sendReaction('👀')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">👀</button>
+            <button onclick="WerewolfModule.sendReaction('🔥')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">🔥</button>
+            <button onclick="WerewolfModule.sendReaction('👍')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">👍</button>
+            <button onclick="WerewolfModule.sendReaction('❓')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">❓</button>
+            <button onclick="WerewolfModule.sendReaction('💀')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">💀</button>
+          </div>
+        </div>
+
+        <!-- Host Skip to Vote Button -->
+        ${isHost ? `
+          <div>
+            <button 
+              onclick="WerewolfModule.hostSkipDayDiscussion()" 
+              class="tap-scale w-full py-4 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-black text-sm shadow-xl shadow-red-600/25 flex items-center justify-center space-x-2"
+            >
+              <i data-lucide="vote" class="w-5 h-5"></i>
+              <span>⚡ 提早結束討論，直接進入投票</span>
+            </button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  },
+
+  // View: Voting Phase
+  renderVotingPhase() {
+    const timerSec = this.state.gameData?.timerSeconds ?? 15;
+    const hasVoted = this.state.gameData?.hasVoted || false;
+    const selectedTarget = this.state.gameData?.selectedVoteTarget;
+    const myVote = this.state.gameData?.myVote;
+
+    return `
+      <div class="relative space-y-4 fade-in pb-16">
+        <!-- Floating Reactions Container -->
+        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
+
+        <!-- Top Header & Timer -->
+        <div class="flex items-center justify-between pt-1">
+          <div class="flex items-center space-x-2">
+            <span class="text-xl">🗳️</span>
+            <div>
+              <h2 class="text-xs font-black text-slate-900 dark:text-white">第四階段：投票處決</h2>
+              <p class="text-[10px] text-slate-400">投出你認為最可疑的狼人</p>
+            </div>
+          </div>
+
+          <div class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-xs font-black text-red-600 dark:text-red-400 animate-pulse">
+            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+            <span id="game-phase-timer">${timerSec}s</span>
+          </div>
+        </div>
+
+        <!-- Voting Prompt Card -->
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+          <p class="text-xs font-bold text-slate-700 dark:text-slate-300">請點擊下方玩家頭像投出選票：</p>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            ${this.state.players.map(p => {
+              const isSelected = selectedTarget === p.id;
+              const isMe = p.id === this.state.myPlayerId;
+              const isMyVoteTarget = myVote === p.id;
+
+              return `
+                <button 
+                  onclick="WerewolfModule.selectVoteTarget('${p.id}')"
+                  ${hasVoted ? 'disabled' : ''}
+                  class="tap-scale p-3.5 rounded-2xl border text-left transition-all ${
+                    isMyVoteTarget 
+                      ? 'bg-rose-600 border-rose-500 text-white shadow-lg shadow-rose-600/30' 
+                      : (isSelected 
+                          ? 'bg-indigo-600 border-indigo-400 text-white shadow-md' 
+                          : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-200')
+                  }"
+                >
+                  <div class="flex items-center space-x-2.5">
+                    <div class="w-9 h-9 rounded-xl ${isSelected || isMyVoteTarget ? 'bg-white/20' : 'bg-indigo-600 text-white'} flex items-center justify-center font-black text-xs shrink-0">
+                      ${p.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div class="truncate">
+                      <div class="text-xs font-black truncate">${p.name}</div>
+                      <div class="text-[10px] opacity-70">${isMe ? '(你自己)' : '玩家'}</div>
+                    </div>
+                  </div>
+                  ${isMyVoteTarget ? `
+                    <div class="text-[10px] font-bold text-rose-200 mt-2">✓ 已投此人</div>
+                  ` : ''}
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Action Button -->
+        <div>
+          ${hasVoted ? `
+            <div class="w-full py-4 rounded-2xl bg-emerald-600 text-white font-black text-xs shadow-xl flex items-center justify-center space-x-2">
+              <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+              <span>已投票給 ${this.getPlayerName(myVote)}！等待開票...</span>
+            </div>
+          ` : `
+            <button 
+              onclick="WerewolfModule.submitVote(WerewolfModule.state.gameData.selectedVoteTarget)"
+              ${!selectedTarget ? 'disabled' : ''}
+              class="tap-scale w-full py-4 rounded-2xl font-black text-sm shadow-xl flex items-center justify-center space-x-2 transition-all ${
+                selectedTarget 
+                  ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white shadow-red-600/30' 
+                  : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+              }"
+            >
+              <i data-lucide="check" class="w-5 h-5"></i>
+              <span>${selectedTarget ? `確認投票給 ${this.getPlayerName(selectedTarget)}` : '請先選取一位投票對象'}</span>
+            </button>
+          `}
+        </div>
+      </div>
+    `;
+  },
+
+  // View: Settlement & Timeline Replay Phase
+  renderResultPhase() {
+    const data = this.state.gameData || {};
+    const winningTeam = data.winningTeam || 'villager';
+    const isVillagerWin = winningTeam === 'villager';
+    const winReason = data.winReason || '';
+    const executedPlayers = data.executedPlayers || [];
+    const voteCounts = data.voteCounts || {};
+    const votes = data.votes || {};
+    const initialCards = data.initialCards || {};
+    const finalCards = data.finalCards || {};
+    const centerCards = data.centerCards || [];
+    const initialCenterCards = data.initialCenterCards || [];
+    const nightLogs = data.nightLogs || [];
+    const isHost = this.state.isHost;
+    const cLabels = ['底牌 A', '底牌 B', '底牌 C'];
+
+    return `
+      <div class="relative space-y-4 fade-in pb-20">
+        <!-- Floating Reactions Container -->
+        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
+
+        <!-- Header -->
+        <div class="flex items-center justify-between pt-1">
+          <span class="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center space-x-1">
+            <i data-lucide="trophy" class="w-4 h-4 text-amber-500"></i>
+            <span>遊戲結算與復盤</span>
+          </span>
+          <button onclick="WerewolfModule.leaveRoom()" class="flex items-center space-x-1 text-xs font-bold text-slate-500 hover:text-slate-700 tap-scale">
+            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+            <span>退出</span>
+          </button>
+        </div>
+
+        <!-- Victory Hero Banner -->
+        <div class="rounded-3xl p-6 text-white shadow-2xl space-y-2 ${
+          isVillagerWin 
+            ? 'bg-gradient-to-br from-emerald-600 via-teal-700 to-emerald-800 shadow-emerald-700/30' 
+            : 'bg-gradient-to-br from-rose-700 via-red-800 to-slate-900 shadow-rose-800/30'
+        }">
+          <div class="flex items-center space-x-2 text-white/80 text-[10px] font-bold uppercase tracking-wider">
+            <span>${isVillagerWin ? '🎉 VICTORY' : '🐺 WEREWOLF WIN'}</span>
+          </div>
+          <h1 class="text-2xl font-black">${isVillagerWin ? '村民陣營獲勝！🎉' : '狼人陣營獲勝！🐺'}</h1>
+          <p class="text-xs text-white/90 leading-relaxed font-semibold">${winReason}</p>
+        </div>
+
+        <!-- Executed Players Card -->
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
+          <div class="flex items-center space-x-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+            <span>💀</span>
+            <span>處決名單：</span>
+          </div>
+
+          ${executedPlayers.length > 0 ? `
+            <div class="space-y-2">
+              ${executedPlayers.map(pId => {
+                const finalRole = finalCards[pId];
+                const rDef = this.getRoleDef(finalRole);
+                return `
+                  <div class="flex items-center justify-between p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40">
+                    <div class="flex items-center space-x-2.5">
+                      <span class="text-2xl">${rDef.icon}</span>
+                      <div>
+                        <div class="text-xs font-bold text-slate-900 dark:text-white">${this.getPlayerName(pId)}</div>
+                        <div class="text-[10px] text-rose-600 dark:text-rose-400 font-bold">${rDef.name} (${rDef.teamName})</div>
+                      </div>
+                    </div>
+                    <span class="text-xs font-black text-rose-500 bg-rose-100 dark:bg-rose-900/50 px-2.5 py-1 rounded-xl">處決 💀</span>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          ` : `
+            <div class="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/30 text-center">
+              <span class="text-lg">🕊️</span>
+              <p class="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">平安夜：無人被處決！</p>
+              <p class="text-[10px] text-slate-400">所有人得票數皆未達 2 票處決門檻</p>
+            </div>
+          `}
+        </div>
+
+        <!-- Players Identity Reveal -->
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+          <h3 class="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 flex items-center space-x-1">
+            <i data-lucide="eye" class="w-4 h-4 text-indigo-500"></i>
+            <span>全員手牌真相揭曉</span>
+          </h3>
+
+          <div class="space-y-2">
+            ${this.state.players.map(p => {
+              const initRole = initialCards[p.id];
+              const finalRole = finalCards[p.id];
+              const initDef = this.getRoleDef(initRole);
+              const finalDef = this.getRoleDef(finalRole);
+              const wasSwapped = initRole !== finalRole;
+              const vCount = voteCounts[p.id] || 0;
+              const votedTarget = votes[p.id];
+
+              return `
+                <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                      <div class="w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-xs">
+                        ${p.name.charAt(0).toUpperCase()}
+                      </div>
+                      <span class="text-xs font-bold text-slate-900 dark:text-white">${p.name}</span>
+                    </div>
+
+                    <div class="flex items-center space-x-1.5">
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        得 ${vCount} 票
+                      </span>
+                      ${wasSwapped ? `
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-800">
+                          🔄 被換過
+                        </span>
+                      ` : ''}
+                    </div>
+                  </div>
+
+                  <div class="flex items-center justify-between text-xs bg-white dark:bg-slate-800/60 p-2 rounded-xl">
+                    <div class="flex items-center space-x-1">
+                      <span class="text-slate-400 text-[10px]">原發：</span>
+                      <span>${initDef.icon} ${initDef.name}</span>
+                    </div>
+                    <span class="text-slate-400 font-bold">➔</span>
+                    <div class="flex items-center space-x-1 font-bold ${finalDef.team === 'werewolf' ? 'text-rose-500' : 'text-indigo-600 dark:text-indigo-400'}">
+                      <span class="text-slate-400 text-[10px] font-normal">最終：</span>
+                      <span>${finalDef.icon} ${finalDef.name}</span>
+                    </div>
+                  </div>
+
+                  ${votedTarget ? `
+                    <p class="text-[10px] text-slate-400 px-1">投給了：<strong>${this.getPlayerName(votedTarget)}</strong></p>
+                  ` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Central Cards Reveal -->
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
+          <h3 class="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">中央 3 張底牌：</h3>
+          <div class="grid grid-cols-3 gap-2 pt-1">
+            ${centerCards.map((cRole, idx) => {
+              const cDef = this.getRoleDef(cRole);
+              const initCRole = initialCenterCards[idx];
+              const wasSwapped = initCRole && initCRole !== cRole;
+              return `
+                <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-center space-y-1">
+                  <div class="text-[10px] font-mono text-slate-400">${cLabels[idx]}</div>
+                  <div class="text-3xl">${cDef.icon}</div>
+                  <div class="text-xs font-bold text-slate-800 dark:text-slate-200">${cDef.name}</div>
+                  ${wasSwapped ? `<span class="text-[9px] text-amber-500 font-bold">已換過</span>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Night Action Timeline (復盤時間軸) -->
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+          <h3 class="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 flex items-center space-x-1">
+            <i data-lucide="history" class="w-4 h-4 text-indigo-500"></i>
+            <span>夜間換牌行動時間軸 (復盤)</span>
+          </h3>
+
+          ${nightLogs.length > 0 ? `
+            <div class="space-y-2 pt-1">
+              ${nightLogs.map((log, idx) => `
+                <div class="flex items-start space-x-2 text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 leading-snug">
+                  <span class="text-slate-400 font-mono text-[10px] shrink-0 mt-0.5">#${idx + 1}</span>
+                  <span class="text-slate-700 dark:text-slate-300 font-medium">${log}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <p class="text-xs text-slate-400 py-2 text-center">本局夜晚無角色進行調換行動</p>
+          `}
+        </div>
+
+        <!-- Host Restart Button -->
+        <div>
+          ${isHost ? `
+            <button 
+              onclick="WerewolfModule.hostRestartGame()" 
+              class="tap-scale w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm shadow-xl shadow-indigo-600/30 flex items-center justify-center space-x-2"
+            >
+              <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+              <span>🔄 再來一局 (返回房間大廳)</span>
+            </button>
+          ` : `
+            <div class="w-full py-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 text-xs font-bold text-center">
+              等待房主發起再來一局...
+            </div>
+          `}
+        </div>
+      </div>
+    `;
   }
 };
 
 window.WerewolfModule = WerewolfModule;
+
