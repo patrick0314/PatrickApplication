@@ -739,6 +739,7 @@ const WerewolfModule = {
 
         case 'PLAYER_CONFIRMED_CARD':
           if (this.state.isHost) {
+            if (data.fromId === this.state.myPlayerId || data.playerId === this.state.myPlayerId) return;
             this.handlePlayerConfirmedCard(data.playerId);
           }
           break;
@@ -759,6 +760,7 @@ const WerewolfModule = {
 
         case 'NIGHT_ACTION':
           if (this.state.isHost) {
+            if (data.fromId === this.state.myPlayerId || data.actorId === this.state.myPlayerId) return;
             this.processNightAction(data);
           }
           break;
@@ -777,6 +779,7 @@ const WerewolfModule = {
 
         case 'VOTE_CAST':
           if (this.state.isHost) {
+            if (data.fromId === this.state.myPlayerId || data.voterId === this.state.myPlayerId) return;
             this.handleVoteCast(data);
           }
           break;
@@ -1906,6 +1909,17 @@ const WerewolfModule = {
     const { roleId, actionType, actorId, params } = payload;
     const actorName = this.getPlayerName(actorId);
 
+    // 防重複機制：同一夜間輪次中，每個玩家/角色行動僅處理一次
+    if (!this.state.gameData.processedActionIds) {
+      this.state.gameData.processedActionIds = {};
+    }
+    const stepIdx = this.state.gameData.currentNightIndex ?? 0;
+    const actionKey = `${stepIdx}_${roleId}_${actorId}`;
+    if (this.state.gameData.processedActionIds[actionKey]) {
+      return;
+    }
+    this.state.gameData.processedActionIds[actionKey] = true;
+
     if (roleId === 'seer') {
       if (actionType === 'PEEK_PLAYER') {
         const targetId = params.targetId;
@@ -2185,6 +2199,7 @@ const WerewolfModule = {
 
   tallyVotesAndSettle() {
     if (!this.state.isHost || !this.state.gameData) return;
+    if (this.state.gamePhase === 'result') return;
     this.clearGameTimer();
 
     const votes = this.state.gameData.votes || {};
