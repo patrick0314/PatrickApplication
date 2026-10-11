@@ -1,5 +1,5 @@
 /**
- * Patrick's App - Settings Module
+ * My App - Settings Module
  * Nickname management (no avatar), Theme selection, Mobile installation guide
  */
 const SettingsModule = {
@@ -8,8 +8,8 @@ const SettingsModule = {
   icon: 'settings',
 
   render() {
-    const settings = StorageManager.get('settings', { theme: 'system', userName: 'Default Name' });
-    const currentName = settings.userName || 'Default Name';
+    const settings = StorageManager.get('settings', { theme: 'system', userName: 'default' });
+    const currentName = settings.userName || 'default';
 
     return `
       <div class="space-y-5 fade-in pb-16">
@@ -23,19 +23,19 @@ const SettingsModule = {
         <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
           <div class="flex items-center space-x-2">
             <i data-lucide="user" class="w-4 h-4 text-indigo-500"></i>
-            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">個人稱呼</h2>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">自訂應用名稱 / 稱呼</h2>
           </div>
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-              使用者暱稱
+              設定名稱 (預設為 default)
             </label>
             <div class="flex space-x-2">
               <input 
                 type="text" 
                 id="nickname-input" 
                 value="${currentName}" 
-                placeholder="輸入您的暱稱..."
+                placeholder="輸入您的自訂名稱..."
                 onkeydown="if(event.key==='Enter') SettingsModule.saveUserName()"
                 class="flex-1 px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
               />
@@ -47,7 +47,7 @@ const SettingsModule = {
               </button>
             </div>
             <p class="text-[11px] text-slate-400 mt-1.5">
-              此暱稱將用於首頁的個人問候語（預設為 Default Name）。
+              儲存後，畫面最上方的頂部標題與首頁問候語將同步更新。
             </p>
           </div>
         </div>
@@ -104,7 +104,7 @@ const SettingsModule = {
                 1. 使用 Safari 開啟線上網址<br>
                 2. 點擊瀏覽器底部正中間的「分享」按鈕（📤）<br>
                 3. 滑動選單並點選「加入主畫面 (+ Add to Home Screen)」<br>
-                4. 點擊右上角「新增」，桌面即可常駐 Patrick's App 圖示！
+                4. 點擊右上角「新增」，桌面即可常駐 App 圖示！
               </p>
             </div>
 
@@ -125,7 +125,7 @@ const SettingsModule = {
 
         <!-- About & Architecture Note -->
         <div class="p-4 rounded-3xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 text-center space-y-1">
-          <p class="text-xs font-bold text-indigo-900 dark:text-indigo-200">Patrick's App v1.0.0</p>
+          <p class="text-xs font-bold text-indigo-900 dark:text-indigo-200">My App v1.0.0</p>
           <p class="text-[11px] text-slate-500 dark:text-slate-400">
             專屬個人的模組化微應用中心 · 準備從零擴充自訂模組
           </p>
@@ -139,13 +139,14 @@ const SettingsModule = {
     if (!input) return;
     const newName = input.value.trim();
     if (!newName) {
-      App.showToast('暱稱不能為空', 'error');
+      App.showToast('名稱不能為空', 'error');
       return;
     }
     const settings = StorageManager.get('settings', {});
     settings.userName = newName;
     StorageManager.set('settings', settings);
-    App.showToast('暱稱已更新！', 'success');
+    App.updateHeaderTitle();
+    App.showToast('名稱已更新！', 'success');
   },
 
   setTheme(theme) {

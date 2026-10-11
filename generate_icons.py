@@ -1,5 +1,5 @@
 import os
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 os.makedirs('icons', exist_ok=True)
 
@@ -10,10 +10,8 @@ def create_app_icon(size, output_path):
     corner_radius = int(size * 0.22)
     
     # 1. Background gradient (Deep Tech Indigo to Vibrant Violet)
-    # We draw subtle horizontal gradient slices
     for y in range(size):
         ratio = y / size
-        # From #312E81 (49, 46, 129) to #4F46E5 (79, 70, 229) to #6366F1 (99, 102, 241)
         if ratio < 0.5:
             local_ratio = ratio * 2
             r = int(49 + (79 - 49) * local_ratio)
@@ -26,7 +24,7 @@ def create_app_icon(size, output_path):
             b = int(229 + (241 - 229) * local_ratio)
         draw.line([(0, y), (size, y)], fill=(r, g, b, 255))
     
-    # Create mask for rounded corners
+    # Rounded corners mask
     mask = Image.new('L', (size, size), 0)
     mask_draw = ImageDraw.Draw(mask)
     mask_draw.rounded_rectangle([(0, 0), (size, size)], radius=corner_radius, fill=255)
@@ -34,7 +32,7 @@ def create_app_icon(size, output_path):
 
     draw = ImageDraw.Draw(img)
 
-    # 2. Inner subtle glow border
+    # 2. Subtle inner glow border
     glow_color = (255, 255, 255, 60)
     draw.rounded_rectangle(
         [(int(size * 0.035), int(size * 0.035)), (int(size * 0.965), int(size * 0.965))],
@@ -43,53 +41,35 @@ def create_app_icon(size, output_path):
         width=max(2, int(size * 0.018))
     )
 
-    # 3. Modern Tech Emblem: Geometric Stylized "P"
-    # Stem: vertical rounded rectangle
-    stem_left = int(size * 0.28)
-    stem_right = int(size * 0.44)
-    stem_top = int(size * 0.22)
-    stem_bottom = int(size * 0.78)
-    stem_radius = int(size * 0.06)
+    # 3. Modern Stylized "M" for "My App"
+    # Using clean bold strokes
+    stroke_w = max(4, int(size * 0.09))
+    
+    # Left stem
+    p1 = (int(size * 0.24), int(size * 0.74))
+    p2 = (int(size * 0.24), int(size * 0.28))
+    
+    # Center vertex
+    p3 = (int(size * 0.50), int(size * 0.56))
+    
+    # Right stem top and bottom
+    p4 = (int(size * 0.76), int(size * 0.28))
+    p5 = (int(size * 0.76), int(size * 0.74))
 
-    # White base for stem
-    draw.rounded_rectangle(
-        [(stem_left, stem_top), (stem_right, stem_bottom)],
-        radius=stem_radius,
-        fill=(255, 255, 255, 255)
-    )
+    # Draw connected "M"
+    draw.line([p1, p2, p3, p4, p5], fill=(255, 255, 255, 255), width=stroke_w, joint="round")
+    
+    # Smooth rounded endcaps
+    r_cap = stroke_w // 2
+    for pt in [p1, p2, p4, p5]:
+        draw.ellipse([(pt[0] - r_cap, pt[1] - r_cap), (pt[0] + r_cap, pt[1] + r_cap)], fill=(255, 255, 255, 255))
 
-    # Loop of "P": top outer circle/rounded rectangle
-    loop_left = stem_left
-    loop_right = int(size * 0.76)
-    loop_top = stem_top
-    loop_bottom = int(size * 0.54)
-    loop_radius = int((loop_bottom - loop_top) / 2)
-
-    draw.rounded_rectangle(
-        [(loop_left, loop_top), (loop_right, loop_bottom)],
-        radius=loop_radius,
-        fill=(255, 255, 255, 255)
-    )
-
-    # Cut out inner hole of the "P" loop (transparent or gradient-colored)
-    hole_left = stem_right
-    hole_right = int(size * 0.62)
-    hole_top = int(size * 0.32)
-    hole_bottom = int(size * 0.44)
-    hole_radius = int((hole_bottom - hole_top) / 2)
-
-    draw.rounded_rectangle(
-        [(hole_left, hole_top), (hole_right, hole_bottom)],
-        radius=hole_radius,
-        fill=(67, 56, 202, 255) # matches background indigo
-    )
-
-    # 4. Subtle accent star/spark in bottom right
-    spark_c = (int(size * 0.70), int(size * 0.72))
-    spark_r = max(4, int(size * 0.045))
+    # 4. Subtle glowing spark accent above center
+    spark_c = (int(size * 0.50), int(size * 0.25))
+    spark_r = max(3, int(size * 0.035))
     draw.ellipse(
         [(spark_c[0] - spark_r, spark_c[1] - spark_r), (spark_c[0] + spark_r, spark_c[1] + spark_r)],
-        fill=(238, 242, 255, 220)
+        fill=(238, 242, 255, 230)
     )
 
     img.save(output_path, 'PNG')

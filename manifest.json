@@ -1,7 +1,7 @@
 {
-  "name": "Patrick's App",
-  "short_name": "Patrick's App",
-  "description": "Patrick 專屬個人客製化微應用工作站",
+  "name": "My App",
+  "short_name": "My App",
+  "description": "個人專屬自訂微應用工作站",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Patrick's App</title>
+  <title>My App</title>
   
   <!-- PWA & Mobile Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Patrick's App">
+  <meta name="apple-mobile-web-app-title" content="My App">
   <meta name="theme-color" content="#4338ca">
-  <meta name="description" content="Patrick 專屬個人客製化微應用工作站">
+  <meta name="description" content="個人專屬自訂微應用工作站">
 
   <!-- Icons & Manifest -->
   <link rel="icon" type="image/png" href="icons/icon-192.png">
@@ -53,13 +53,13 @@
   <!-- Main Mobile App Shell -->
   <div class="flex-1 flex flex-col max-w-md mx-auto w-full relative">
 
-    <!-- Top Safe Area Header Bar -->
+    <!-- Top Safe Area Header Bar with Dynamic User Title -->
     <header class="sticky top-0 z-30 glass-nav border-b border-slate-200/50 dark:border-slate-800/50 px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-2.5">
-        <div class="h-7 w-7 rounded-xl bg-gradient-to-tr from-indigo-700 to-indigo-500 flex items-center justify-center text-white font-black text-xs shadow-md shadow-indigo-600/30">
-          P
+        <div class="h-7 w-7 rounded-xl bg-gradient-to-tr from-indigo-700 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
+          <i data-lucide="app-window" class="w-4 h-4"></i>
         </div>
-        <span class="font-black text-base tracking-tight text-slate-800 dark:text-slate-100">Patrick's App</span>
+        <span id="app-header-title" class="font-black text-base tracking-tight text-slate-800 dark:text-slate-100">default</span>
       </div>
 
       <div class="flex items-center space-x-1.5">

@@ -1,11 +1,10 @@
 /**
- * Patrick's App Main Controller
+ * My App Main Controller
  * Modular Registry, Navigation, Theme, and Notification Management
  */
 const App = {
   activeTab: 'dashboard',
 
-  // Extensible Module Registry - new customized modules will be registered here!
   modules: [
     {
       id: 'dashboard',
@@ -25,6 +24,7 @@ const App = {
   init() {
     StorageManager.init();
     this.applyTheme();
+    this.updateHeaderTitle();
     this.registerServiceWorker();
 
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -36,9 +36,18 @@ const App = {
 
     this.render();
 
-    window.addEventListener('patrickapp:storage-updated', () => {
+    window.addEventListener('myapp:storage-updated', () => {
+      this.updateHeaderTitle();
       this.updateBadges();
     });
+  },
+
+  updateHeaderTitle() {
+    const settings = StorageManager.get('settings', { userName: 'default' });
+    const titleEl = document.getElementById('app-header-title');
+    if (titleEl) {
+      titleEl.textContent = settings.userName || 'default';
+    }
   },
 
   applyTheme() {
@@ -86,6 +95,7 @@ const App = {
       container.innerHTML = currentModule.render();
     }
 
+    this.updateHeaderTitle();
     this.renderNav();
 
     if (window.lucide) {

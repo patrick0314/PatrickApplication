@@ -1,9 +1,9 @@
 /**
- * Patrick's App Storage Layer
- * Manages local persistence and user settings
+ * My App Storage Layer
+ * Manages local persistence and user preferences
  */
 const StorageManager = {
-  PREFIX: 'patrickapp:',
+  PREFIX: 'myapp:',
 
   get(key, defaultValue = null) {
     try {
@@ -18,7 +18,7 @@ const StorageManager = {
   set(key, value) {
     try {
       localStorage.setItem(this.PREFIX + key, JSON.stringify(value));
-      window.dispatchEvent(new CustomEvent('patrickapp:storage-updated', { detail: { key, value } }));
+      window.dispatchEvent(new CustomEvent('myapp:storage-updated', { detail: { key, value } }));
       return true;
     } catch (e) {
       console.error(`[StorageManager] Failed to write ${key}:`, e);
@@ -28,7 +28,7 @@ const StorageManager = {
 
   remove(key) {
     localStorage.removeItem(this.PREFIX + key);
-    window.dispatchEvent(new CustomEvent('patrickapp:storage-updated', { detail: { key, value: null } }));
+    window.dispatchEvent(new CustomEvent('myapp:storage-updated', { detail: { key, value: null } }));
   },
 
   init() {
@@ -36,13 +36,12 @@ const StorageManager = {
     if (!settings) {
       settings = {
         theme: 'system',
-        userName: 'Default Name',
+        userName: 'default',
         createdAt: new Date().toISOString()
       };
       this.set('settings', settings);
-    } else if (!settings.userName || settings.userName === 'Patrick') {
-      // Migrate initial test name to Default Name
-      settings.userName = 'Default Name';
+    } else if (!settings.userName || settings.userName === 'Default Name' || settings.userName === 'Patrick') {
+      settings.userName = 'default';
       this.set('settings', settings);
     }
 

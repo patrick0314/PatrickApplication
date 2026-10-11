@@ -1,5 +1,5 @@
 /**
- * Patrick's App - Dashboard Module (Home Screen)
+ * My App - Dashboard Module (Home Screen)
  * Modern Modular Dashboard - Clean canvas ready for custom modules
  */
 const DashboardModule = {
@@ -8,8 +8,8 @@ const DashboardModule = {
   icon: 'layout-grid',
 
   render() {
-    const settings = StorageManager.get('settings', { userName: 'Default Name' });
-    const currentName = settings.userName || 'Default Name';
+    const settings = StorageManager.get('settings', { userName: 'default' });
+    const currentName = settings.userName || 'default';
     const installedModules = StorageManager.get('installed_modules', []);
 
     // Greeting based on current time
@@ -26,7 +26,7 @@ const DashboardModule = {
 
     return `
       <div class="space-y-5 fade-in pb-16">
-        <!-- Top Greeting Header (Clean, No Avatar) -->
+        <!-- Top Greeting Header -->
         <div class="pt-2">
           <p class="text-[11px] font-semibold tracking-wider text-indigo-600 dark:text-indigo-400 uppercase">${dateStr}</p>
           <h1 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white mt-0.5">
