@@ -21,8 +21,11 @@ const WerewolfModule = {
     isReady: false,
     players: [],
     messages: [],
-    brokerIndex: 0
+    brokerIndex: 0,
+    lastReactionTime: 0
   },
+
+  _reactionTimer: null,
 
   brokers: [
     'wss://broker.emqx.io:8084/mqtt',
@@ -214,6 +217,11 @@ const WerewolfModule = {
         });
         this.state.client.unsubscribe(this.getRoomTopic(this.state.roomId));
       }
+      if (this._reactionTimer) {
+        clearInterval(this._reactionTimer);
+        this._reactionTimer = null;
+      }
+      this.state.lastReactionTime = 0;
       this.state.currentView = 'lobby';
       this.state.roomId = '';
       this.state.players = [];
@@ -305,6 +313,9 @@ const WerewolfModule = {
           break;
 
         case 'REACTION':
+          // 避免發送者自身收到 MQTT 廣播重複彈出（發送者點擊當下已在本地即時顯示）
+          if (data.fromId === this.state.myPlayerId) return;
+
           this.state.messages.push({
             id: 'msg_' + Date.now() + Math.random(),
             from: data.fromName || '玩家',
@@ -362,12 +373,85 @@ const WerewolfModule = {
   },
 
   sendReaction(emoji) {
+    const now = Date.now();
+    const elapsed = now - (this.state.lastReactionTime || 0);
+    const cooldownMs = 10000;
+
+    if (elapsed < cooldownMs) {
+      const remainingSec = Math.ceil((cooldownMs - elapsed) / 1000);
+      App.showToast(`表情冷卻中，請等待 ${remainingSec} 秒 ⏳`, 'info');
+      if ('vibrate' in navigator) navigator.vibrate(40);
+      return;
+    }
+
+    this.state.lastReactionTime = now;
+    this.startReactionCooldown();
+
+    if ('vibrate' in navigator) navigator.vibrate(25);
+
     this.broadcast({
       type: 'REACTION',
       fromName: this.state.myPlayerName,
       emoji: emoji
     });
+
+    this.state.messages.push({
+      id: 'msg_' + Date.now() + Math.random(),
+      from: '我',
+      emoji: emoji,
+      isReaction: true,
+      time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    });
+
     this.showFloatingReaction(emoji, '我');
+  },
+
+  startReactionCooldown() {
+    if (this._reactionTimer) {
+      clearInterval(this._reactionTimer);
+      this._reactionTimer = null;
+    }
+
+    const updateCooldownUI = () => {
+      const now = Date.now();
+      const elapsed = now - (this.state.lastReactionTime || 0);
+      const remainingSec = Math.ceil((10000 - elapsed) / 1000);
+      const hint = document.getElementById('reaction-hint-text');
+      const container = document.getElementById('reaction-buttons-container');
+
+      if (remainingSec <= 0) {
+        if (this._reactionTimer) {
+          clearInterval(this._reactionTimer);
+          this._reactionTimer = null;
+        }
+        if (hint) {
+          hint.textContent = '點擊即時廣播全體手機';
+          hint.className = 'text-[10px] text-slate-400';
+        }
+        if (container) {
+          const btns = container.querySelectorAll('.reaction-btn');
+          btns.forEach(b => {
+            b.classList.remove('opacity-40', 'cursor-not-allowed');
+            b.classList.add('hover:scale-125');
+          });
+        }
+      } else {
+        if (hint) {
+          hint.textContent = `⏳ 冷卻中 (${remainingSec} 秒)`;
+          hint.className = 'text-[10px] font-bold text-amber-500 animate-pulse';
+        }
+        if (container) {
+          const btns = container.querySelectorAll('.reaction-btn');
+          btns.forEach(b => {
+            b.classList.add('opacity-40', 'cursor-not-allowed');
+            b.classList.remove('hover:scale-125');
+          });
+        }
+      }
+    };
+
+    updateCooldownUI();
+    this._reactionTimer = setInterval(updateCooldownUI, 500);
   },
 
   sendBroadcastTest() {
@@ -393,14 +477,16 @@ const WerewolfModule = {
     const container = document.getElementById('floating-reactions');
     if (!container) return;
 
+    const offset = Math.floor(Math.random() * 40) - 20;
     const el = document.createElement('div');
-    el.className = 'absolute right-4 bottom-24 flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/95 text-white text-xs font-bold shadow-2xl border border-white/20 animate-bounce pointer-events-none z-50';
+    el.className = 'absolute right-6 bottom-24 flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/95 text-white text-xs font-bold shadow-2xl border border-white/20 animate-bounce pointer-events-none z-50 transition-all';
+    el.style.transform = `translateX(${offset}px)`;
     el.innerHTML = `<span class="text-xl">${emoji}</span><span class="text-[11px] opacity-90">${fromName}</span>`;
     container.appendChild(el);
 
     setTimeout(() => {
       if (el && el.parentNode) el.parentNode.removeChild(el);
-    }, 2000);
+    }, 2200);
   },
 
   addSystemMessage(text) {
@@ -539,6 +625,14 @@ const WerewolfModule = {
   renderRoomView() {
     const isMeReady = this.state.isReady;
     const allReady = this.state.players.length >= 2 && this.state.players.every(p => p.isReady);
+    const now = Date.now();
+    const elapsed = now - (this.state.lastReactionTime || 0);
+    const isCoolingDown = elapsed < 10000;
+    const remainingSec = isCoolingDown ? Math.ceil((10000 - elapsed) / 1000) : 0;
+
+    if (isCoolingDown && !this._reactionTimer) {
+      setTimeout(() => this.startReactionCooldown(), 0);
+    }
 
     return `
       <div class="relative space-y-4 fade-in pb-20" id="room-view-container">
@@ -614,15 +708,17 @@ const WerewolfModule = {
           <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-3.5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
             <div class="flex items-center justify-between px-1">
               <span class="text-[11px] font-bold text-slate-600 dark:text-slate-300">快捷表情互動</span>
-              <span class="text-[10px] text-slate-400">點擊即時廣播全體手機</span>
+              <span id="reaction-hint-text" class="text-[10px] ${isCoolingDown ? 'font-bold text-amber-500 animate-pulse' : 'text-slate-400'}">
+                ${isCoolingDown ? `⏳ 冷卻中 (${remainingSec} 秒)` : '點擊即時廣播全體手機'}
+              </span>
             </div>
-            <div class="flex items-center justify-around py-1">
-              <button onclick="WerewolfModule.sendReaction('🐺')" class="tap-scale text-2xl hover:scale-125 transition" title="狼嚎">🐺</button>
-              <button onclick="WerewolfModule.sendReaction('👀')" class="tap-scale text-2xl hover:scale-125 transition" title="懷疑">👀</button>
-              <button onclick="WerewolfModule.sendReaction('🔥')" class="tap-scale text-2xl hover:scale-125 transition" title="開戰">🔥</button>
-              <button onclick="WerewolfModule.sendReaction('👍')" class="tap-scale text-2xl hover:scale-125 transition" title="讚">👍</button>
-              <button onclick="WerewolfModule.sendReaction('❓')" class="tap-scale text-2xl hover:scale-125 transition" title="疑惑">❓</button>
-              <button onclick="WerewolfModule.sendReaction('💀')" class="tap-scale text-2xl hover:scale-125 transition" title="出局">💀</button>
+            <div id="reaction-buttons-container" class="flex items-center justify-around py-1">
+              <button onclick="WerewolfModule.sendReaction('🐺')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="狼嚎">🐺</button>
+              <button onclick="WerewolfModule.sendReaction('👀')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="懷疑">👀</button>
+              <button onclick="WerewolfModule.sendReaction('🔥')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="開戰">🔥</button>
+              <button onclick="WerewolfModule.sendReaction('👍')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="讚">👍</button>
+              <button onclick="WerewolfModule.sendReaction('❓')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="疑惑">❓</button>
+              <button onclick="WerewolfModule.sendReaction('💀')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="出局">💀</button>
             </div>
           </div>
 
