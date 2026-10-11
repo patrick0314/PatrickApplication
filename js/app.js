@@ -24,7 +24,7 @@ const App = {
   init() {
     StorageManager.init();
     this.applyTheme();
-    this.updateHeaderTitle();
+    this.updateHeader();
     this.registerServiceWorker();
 
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -37,16 +37,22 @@ const App = {
     this.render();
 
     window.addEventListener('myapp:storage-updated', () => {
-      this.updateHeaderTitle();
+      this.updateHeader();
       this.updateBadges();
     });
   },
 
-  updateHeaderTitle() {
+  updateHeader() {
     const settings = StorageManager.get('settings', { userName: 'default' });
     const titleEl = document.getElementById('app-header-title');
     if (titleEl) {
       titleEl.textContent = settings.userName || 'default';
+    }
+
+    const dateEl = document.getElementById('app-header-date');
+    if (dateEl) {
+      const dateOptions = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+      dateEl.textContent = new Date().toLocaleDateString('zh-TW', dateOptions);
     }
   },
 
@@ -95,7 +101,7 @@ const App = {
       container.innerHTML = currentModule.render();
     }
 
-    this.updateHeaderTitle();
+    this.updateHeader();
     this.renderNav();
 
     if (window.lucide) {
