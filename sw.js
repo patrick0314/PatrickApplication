@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lifehub-v1';
+const CACHE_NAME = 'patricks-app-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -7,7 +7,6 @@ const ASSETS_TO_CACHE = [
   './js/storage.js',
   './js/app.js',
   './js/modules/dashboard.js',
-  './js/modules/tasks.js',
   './js/modules/settings.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -39,10 +38,8 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
-  // Stale-while-revalidate strategy for same-origin, network-first for external CDN
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {
@@ -53,10 +50,7 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return networkResponse;
-      }).catch(() => {
-        // Fallback to cache if offline
-        return cachedResponse;
-      });
+      }).catch(() => cachedResponse);
 
       return cachedResponse || fetchPromise;
     })

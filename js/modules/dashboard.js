@@ -1,22 +1,17 @@
 /**
- * LifeHub - Dashboard Module
- * Shows daily greeting, task summary, quick actions, and expansion showcase
+ * Patrick's App - Dashboard Module (Home Screen)
+ * Modern Modular Dashboard - Clean canvas ready for building from scratch
  */
 const DashboardModule = {
   id: 'dashboard',
-  name: '總覽',
-  icon: 'layout-dashboard',
+  name: '首頁',
+  icon: 'layout-grid',
 
   render() {
     const settings = StorageManager.get('settings', { userName: 'Patrick' });
-    const tasks = StorageManager.get('tasks', []);
-    
-    const totalCount = tasks.length;
-    const completedCount = tasks.filter(t => t.completed).length;
-    const pendingCount = totalCount - completedCount;
-    const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+    const installedModules = StorageManager.get('installed_modules', []);
 
-    // Greeting based on time
+    // Greeting based on current time
     const hour = new Date().getHours();
     let greeting = '早安';
     if (hour >= 11 && hour < 14) greeting = '午安';
@@ -25,146 +20,120 @@ const DashboardModule = {
     else if (hour >= 23 || hour < 5) greeting = '夜深了，注意休息';
 
     // Localized date
-    const dateOptions = { month: 'long', day: 'numeric', weekday: 'long' };
+    const dateOptions = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
     const dateStr = new Date().toLocaleDateString('zh-TW', dateOptions);
 
-    // Filter top 3 pending tasks
-    const topPendingTasks = tasks.filter(t => !t.completed).slice(0, 3);
-
     return `
-      <div class="space-y-5 fade-in pb-8">
+      <div class="space-y-5 fade-in pb-16">
         <!-- Top Greeting Header -->
         <div class="flex items-center justify-between pt-2">
           <div>
-            <p class="text-xs font-medium tracking-wide text-indigo-600 dark:text-indigo-400 uppercase">${dateStr}</p>
-            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-0.5">
+            <p class="text-[11px] font-semibold tracking-wider text-indigo-600 dark:text-indigo-400 uppercase">${dateStr}</p>
+            <h1 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white mt-0.5">
               ${greeting}，${settings.userName || 'Patrick'} 👋
             </h1>
           </div>
-          <div class="h-10 w-10 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 font-bold text-sm">
+          <div class="h-11 w-11 rounded-2xl bg-gradient-to-tr from-indigo-700 via-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30 font-black text-base">
             ${(settings.userName || 'P').charAt(0).toUpperCase()}
           </div>
         </div>
 
-        <!-- Daily Overview Card -->
-        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 p-5 text-white shadow-xl shadow-indigo-600/20">
+        <!-- Hero Canvas Banner Card -->
+        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-800 via-indigo-700 to-slate-900 p-6 text-white shadow-xl shadow-indigo-700/25">
           <div class="relative z-10">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold uppercase tracking-wider text-indigo-200">今日完成度</span>
-              <span class="text-xs bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full font-medium">
-                ${completedCount} / ${totalCount} 項
-              </span>
-            </div>
-            
-            <div class="mt-3 flex items-baseline space-x-2">
-              <span class="text-4xl font-black">${progressPercent}%</span>
-              <span class="text-xs text-indigo-200">
-                ${pendingCount === 0 && totalCount > 0 ? '🎉 今日事項全數完成！' : `還有 ${pendingCount} 項待辦事項`}
-              </span>
+            <div class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-[11px] font-bold text-indigo-100 mb-3 border border-white/10">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>純淨畫布 · 就緒完畢</span>
             </div>
 
-            <!-- Progress Bar -->
-            <div class="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-black/20">
-              <div class="h-full bg-white transition-all duration-500 ease-out rounded-full" style="width: ${progressPercent}%"></div>
+            <h2 class="text-xl font-black tracking-tight leading-snug">
+              專屬個人的掌上應用中心
+            </h2>
+            <p class="text-xs text-indigo-200 mt-2 leading-relaxed opacity-90">
+              所有預設示範功能已全數移除。現在這是一個完全空白且結構完備的起點，您可以隨時告訴我您想實現的第一個自訂功能！
+            </p>
+
+            <div class="mt-5 flex items-center space-x-3 text-[11px]">
+              <div class="flex items-center space-x-1.5 text-indigo-200">
+                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+                <span>100% 離線私密</span>
+              </div>
+              <div class="flex items-center space-x-1.5 text-indigo-200">
+                <i data-lucide="wifi-off" class="w-4 h-4 text-indigo-300"></i>
+                <span>無網亦可開啟</span>
+              </div>
             </div>
           </div>
 
-          <!-- Subtle Background Decoration -->
-          <div class="absolute -right-6 -bottom-6 h-32 w-32 rounded-full bg-white/10 blur-xl"></div>
-          <div class="absolute -left-6 -top-6 h-28 w-28 rounded-full bg-indigo-400/20 blur-lg"></div>
+          <!-- Decorative Ambient Shapes -->
+          <div class="absolute -right-8 -bottom-8 h-40 w-40 rounded-full bg-indigo-500/20 blur-2xl"></div>
+          <div class="absolute -left-10 -top-10 h-32 w-32 rounded-full bg-violet-400/20 blur-xl"></div>
         </div>
 
-        <!-- Quick Action Shortcuts -->
-        <div class="grid grid-cols-3 gap-3">
-          <button onclick="App.openNewTaskModal()" class="tap-scale flex flex-col items-center justify-center rounded-xl bg-white dark:bg-slate-800/80 p-3.5 shadow-sm border border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-200">
-            <div class="h-10 w-10 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-1.5">
-              <i data-lucide="plus" class="w-5 h-5"></i>
-            </div>
-            <span class="text-xs font-medium">新增事項</span>
-          </button>
-
-          <button onclick="StorageManager.exportBackup(); App.showToast('備份已下載', 'success');" class="tap-scale flex flex-col items-center justify-center rounded-xl bg-white dark:bg-slate-800/80 p-3.5 shadow-sm border border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-200">
-            <div class="h-10 w-10 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-1.5">
+        <!-- Quick System Tools -->
+        <div class="grid grid-cols-2 gap-3">
+          <button onclick="StorageManager.exportBackup(); App.showToast('備份已下載到手機', 'success');" class="tap-scale flex items-center space-x-3 p-3.5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-100 dark:border-slate-800 shadow-sm text-left">
+            <div class="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
               <i data-lucide="download" class="w-5 h-5"></i>
             </div>
-            <span class="text-xs font-medium">匯出備份</span>
+            <div>
+              <p class="text-xs font-bold text-slate-900 dark:text-white">資料備份</p>
+              <p class="text-[10px] text-slate-400">匯出 JSON 檔</p>
+            </div>
           </button>
 
-          <button onclick="App.switchTab('settings')" class="tap-scale flex flex-col items-center justify-center rounded-xl bg-white dark:bg-slate-800/80 p-3.5 shadow-sm border border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-200">
-            <div class="h-10 w-10 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-1.5">
-              <i data-lucide="sliders-horizontal" class="w-5 h-5"></i>
-            </div>
-            <span class="text-xs font-medium">系統設定</span>
-          </button>
-        </div>
-
-        <!-- Priority Tasks Section -->
-        <div class="rounded-2xl bg-white dark:bg-slate-800/80 p-4 shadow-sm border border-slate-100 dark:border-slate-800">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center space-x-2">
-              <i data-lucide="zap" class="w-4 h-4 text-amber-500"></i>
-              <h2 class="font-bold text-sm text-slate-900 dark:text-white">待辦焦點</h2>
-            </div>
-            <button onclick="App.switchTab('tasks')" class="text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:underline flex items-center">
-              查看全部 <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-0.5"></i>
-            </button>
-          </div>
-
-          ${topPendingTasks.length === 0 ? `
-            <div class="py-6 text-center text-slate-400 dark:text-slate-500 text-xs">
-              <i data-lucide="check-circle-2" class="w-8 h-8 mx-auto mb-2 text-emerald-500 opacity-80"></i>
-              太棒了！目前沒有未完成的焦點事項
-            </div>
-          ` : `
-            <div class="space-y-2.5">
-              ${topPendingTasks.map(task => `
-                <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">
-                  <div class="flex items-center space-x-3 flex-1 min-w-0">
-                    <button onclick="TasksModule.toggleTask('${task.id}')" class="h-5 w-5 rounded-md border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center tap-scale">
-                      ${task.completed ? '<i data-lucide="check" class="w-3.5 h-3.5 text-indigo-600"></i>' : ''}
-                    </button>
-                    <span class="text-xs font-medium text-slate-800 dark:text-slate-200 truncate ${task.completed ? 'line-through text-slate-400' : ''}">
-                      ${task.title}
-                    </span>
-                  </div>
-                  <span class="ml-2 text-[10px] px-2 py-0.5 rounded font-medium ${
-                    task.priority === 'high' ? 'bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-400' :
-                    task.priority === 'medium' ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400' :
-                    'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                  }">
-                    ${task.category || '生活'}
-                  </span>
-                </div>
-              `).join('')}
-            </div>
-          `}
-        </div>
-
-        <!-- Modular App Expansion Banner -->
-        <div class="rounded-2xl border border-dashed border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/20 p-4">
-          <div class="flex items-start space-x-3">
-            <div class="h-9 w-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-              <i data-lucide="blocks" class="w-5 h-5"></i>
+          <button onclick="App.switchTab('settings')" class="tap-scale flex items-center space-x-3 p-3.5 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-100 dark:border-slate-800 shadow-sm text-left">
+            <div class="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+              <i data-lucide="settings" class="w-5 h-5"></i>
             </div>
             <div>
-              <h3 class="text-xs font-bold text-slate-900 dark:text-white">專屬個人的模組化架構</h3>
-              <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                本 App 採用獨立分頁模組設計。後續您只要在對話中告訴我任何新功能需求，我們就能為您直接掛載新的專屬功能模組！
+              <p class="text-xs font-bold text-slate-900 dark:text-white">偏好設定</p>
+              <p class="text-[10px] text-slate-400">主題與手機安裝</p>
+            </div>
+          </button>
+        </div>
+
+        <!-- Modular App Expansion Area -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <i data-lucide="layout-grid" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
+              <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">功能模組專區</h2>
+            </div>
+            <span class="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full font-medium">
+              目前 ${installedModules.length} 個模組
+            </span>
+          </div>
+
+          <!-- Slot Placeholder / Inspiration Card -->
+          <div class="rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800 p-6 text-center space-y-3 bg-white/50 dark:bg-slate-900/40">
+            <div class="h-12 w-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-sm">
+              <i data-lucide="plus" class="w-6 h-6 stroke-[2.5]"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-slate-900 dark:text-white">從零開始打造您的專屬功能</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed max-w-xs mx-auto">
+                請隨時在對話中告訴我您想做的第一個功能。每個功能都會直接變成此處的獨立卡片與專屬分頁！
               </p>
-              <div class="mt-3 flex flex-wrap gap-1.5">
-                <span class="inline-flex items-center text-[10px] bg-white dark:bg-slate-800 px-2 py-1 rounded-md text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                  💰 個人記帳
-                </span>
-                <span class="inline-flex items-center text-[10px] bg-white dark:bg-slate-800 px-2 py-1 rounded-md text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                  🎯 習慣打卡
-                </span>
-                <span class="inline-flex items-center text-[10px] bg-white dark:bg-slate-800 px-2 py-1 rounded-md text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                  📝 隨手筆記
-                </span>
-                <span class="inline-flex items-center text-[10px] bg-white dark:bg-slate-800 px-2 py-1 rounded-md text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                  ⏱️ 專注番茄鐘
-                </span>
-              </div>
+            </div>
+
+            <!-- Inspiration Tags -->
+            <div class="pt-2 flex flex-wrap justify-center gap-2">
+              <span class="inline-flex items-center text-[11px] font-medium bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                🎮 多人連線小遊戲
+              </span>
+              <span class="inline-flex items-center text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-xl">
+                💰 個人收支記帳
+              </span>
+              <span class="inline-flex items-center text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-xl">
+                🎯 每日打卡習慣
+              </span>
+              <span class="inline-flex items-center text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-xl">
+                📝 隨手靈感速記
+              </span>
+              <span class="inline-flex items-center text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-xl">
+                ⏱️ 專注計時番茄鐘
+              </span>
             </div>
           </div>
         </div>
@@ -172,9 +141,7 @@ const DashboardModule = {
     `;
   },
 
-  init() {
-    // any module-specific listeners if needed
-  }
+  init() {}
 };
 
 window.DashboardModule = DashboardModule;

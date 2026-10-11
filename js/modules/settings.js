@@ -1,5 +1,5 @@
 /**
- * LifeHub - Settings & Data Management Module
+ * Patrick's App - Settings & Data Management Module
  * Theme settings, JSON Backup/Restore, Mobile installation guide
  */
 const SettingsModule = {
@@ -9,10 +9,9 @@ const SettingsModule = {
 
   render() {
     const settings = StorageManager.get('settings', { theme: 'system', userName: 'Patrick' });
-    const tasks = StorageManager.get('tasks', []);
 
     return `
-      <div class="space-y-5 fade-in pb-20">
+      <div class="space-y-5 fade-in pb-16">
         <!-- Header -->
         <div class="pt-2">
           <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">系統設定</h1>
@@ -20,9 +19,9 @@ const SettingsModule = {
         </div>
 
         <!-- User Profile Card -->
-        <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
           <div class="flex items-center space-x-3">
-            <div class="h-12 w-12 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+            <div class="h-12 w-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-lg shadow-md shadow-indigo-600/30">
               ${(settings.userName || 'P').charAt(0).toUpperCase()}
             </div>
             <div>
@@ -30,20 +29,20 @@ const SettingsModule = {
               <p class="text-xs text-slate-400">專屬個人工作站使用者</p>
             </div>
           </div>
-          <button onclick="SettingsModule.editUserName()" class="text-xs text-indigo-600 dark:text-indigo-400 font-semibold px-2.5 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40">
+          <button onclick="SettingsModule.editUserName()" class="text-xs text-indigo-600 dark:text-indigo-400 font-semibold px-3 py-1.5 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40">
             修改暱稱
           </button>
         </div>
 
         <!-- Appearance Section -->
-        <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
           <div class="flex items-center space-x-2">
             <i data-lucide="moon" class="w-4 h-4 text-indigo-500"></i>
             <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">外觀主題</h2>
           </div>
 
-          <div class="grid grid-cols-3 gap-2">
-            <button onclick="SettingsModule.setTheme('system')" class="tap-scale flex flex-col items-center p-3 rounded-xl border text-xs font-medium transition ${
+          <div class="grid grid-cols-3 gap-2 pt-1">
+            <button onclick="SettingsModule.setTheme('system')" class="tap-scale flex flex-col items-center p-3 rounded-2xl border text-xs font-medium transition ${
               settings.theme === 'system' 
                 ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 font-bold' 
                 : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
@@ -51,7 +50,7 @@ const SettingsModule = {
               <i data-lucide="smartphone" class="w-5 h-5 mb-1.5"></i>
               跟隨系統
             </button>
-            <button onclick="SettingsModule.setTheme('light')" class="tap-scale flex flex-col items-center p-3 rounded-xl border text-xs font-medium transition ${
+            <button onclick="SettingsModule.setTheme('light')" class="tap-scale flex flex-col items-center p-3 rounded-2xl border text-xs font-medium transition ${
               settings.theme === 'light' 
                 ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 font-bold' 
                 : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
@@ -59,7 +58,7 @@ const SettingsModule = {
               <i data-lucide="sun" class="w-5 h-5 mb-1.5"></i>
               明亮模式
             </button>
-            <button onclick="SettingsModule.setTheme('dark')" class="tap-scale flex flex-col items-center p-3 rounded-xl border text-xs font-medium transition ${
+            <button onclick="SettingsModule.setTheme('dark')" class="tap-scale flex flex-col items-center p-3 rounded-2xl border text-xs font-medium transition ${
               settings.theme === 'dark' 
                 ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 font-bold' 
                 : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
@@ -71,21 +70,18 @@ const SettingsModule = {
         </div>
 
         <!-- Data Backup & Restore -->
-        <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <i data-lucide="hard-drive" class="w-4 h-4 text-emerald-500"></i>
-              <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">資料安全與備份</h2>
-            </div>
-            <span class="text-[10px] text-slate-400">目前本機儲存 ${tasks.length} 筆事項</span>
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+          <div class="flex items-center space-x-2">
+            <i data-lucide="hard-drive" class="w-4 h-4 text-emerald-500"></i>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">資料安全與離線備份</h2>
           </div>
 
           <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-            所有資料均保存在您手機的本機離線空間，具備最高隱私性。建議定期下載 JSON 備份檔保存。
+            所有資料均保存在您手機的本機空間，具備最高隱私性。未來新增功能後的數據皆可隨時在此下載完整備份。
           </p>
 
           <div class="space-y-2 pt-1">
-            <button onclick="StorageManager.exportBackup(); App.showToast('備份檔案已下載！', 'success');" class="tap-scale w-full flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-xs font-semibold text-slate-800 dark:text-slate-200">
+            <button onclick="StorageManager.exportBackup(); App.showToast('備份檔案已下載！', 'success');" class="tap-scale w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-xs font-semibold text-slate-800 dark:text-slate-200">
               <div class="flex items-center space-x-2.5">
                 <i data-lucide="download" class="w-4 h-4 text-emerald-500"></i>
                 <span>匯出 JSON 備份檔到手機</span>
@@ -93,7 +89,7 @@ const SettingsModule = {
               <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
             </button>
 
-            <label class="tap-scale w-full flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+            <label class="tap-scale w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
               <div class="flex items-center space-x-2.5">
                 <i data-lucide="upload" class="w-4 h-4 text-indigo-500"></i>
                 <span>匯入 JSON 備份還原資料</span>
@@ -102,10 +98,10 @@ const SettingsModule = {
               <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
             </label>
 
-            <button onclick="SettingsModule.confirmClearData()" class="tap-scale w-full flex items-center justify-between p-3 rounded-xl bg-red-50/50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-100/50">
+            <button onclick="SettingsModule.confirmClearData()" class="tap-scale w-full flex items-center justify-between p-3.5 rounded-2xl bg-red-50/50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-100/50">
               <div class="flex items-center space-x-2.5">
                 <i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i>
-                <span>清除所有本機資料</span>
+                <span>重置所有本機資料</span>
               </div>
               <i data-lucide="chevron-right" class="w-4 h-4 text-red-400"></i>
             </button>
@@ -113,46 +109,46 @@ const SettingsModule = {
         </div>
 
         <!-- PWA Installation Guide -->
-        <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
           <div class="flex items-center space-x-2">
             <i data-lucide="smartphone-nfc" class="w-4 h-4 text-violet-500"></i>
             <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">手機主畫面安裝指引</h2>
           </div>
 
           <div class="space-y-3 text-xs">
-            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 space-y-1.5">
+            <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 space-y-1.5">
               <div class="flex items-center space-x-2 font-bold text-slate-900 dark:text-white">
                 <span class="text-base">🍎</span>
                 <span>iPhone (iOS Safari) 安裝方式：</span>
               </div>
               <p class="text-slate-500 dark:text-slate-400 leading-relaxed text-[11px] pl-6">
-                1. 使用 Safari 開啟此網頁<br>
-                2. 點擊瀏覽器下方底部的「分享」按鈕（方框向上箭頭 📤）<br>
+                1. 使用 Safari 開啟線上網址<br>
+                2. 點擊瀏覽器底部正中間的「分享」按鈕（📤）<br>
                 3. 滑動選單並點選「加入主畫面 (+ Add to Home Screen)」<br>
-                4. 點擊「新增」，即可在手機桌面全螢幕無網址列開啟！
+                4. 點擊右上角「新增」，桌面即可常駐 Patrick's App 圖示！
               </p>
             </div>
 
-            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 space-y-1.5">
+            <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 space-y-1.5">
               <div class="flex items-center space-x-2 font-bold text-slate-900 dark:text-white">
                 <span class="text-base">🤖</span>
                 <span>Android (安卓 Chrome) 安裝方式：</span>
               </div>
               <p class="text-slate-500 dark:text-slate-400 leading-relaxed text-[11px] pl-6">
-                1. 使用 Chrome 開啟此網頁<br>
-                2. 點擊右上角「三個點選單 ⋮」<br>
+                1. 使用 Chrome 開啟線上網址<br>
+                2. 點擊右上角「三個點選單 (⋮)」<br>
                 3. 點選「安裝應用程式」或「加到主畫面」<br>
-                4. 確認後即可在手機桌面直接點擊啟動！
+                4. 確認後即可在桌面全螢幕開啟！
               </p>
             </div>
           </div>
         </div>
 
         <!-- About & Architecture Note -->
-        <div class="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 text-center space-y-1">
-          <p class="text-xs font-bold text-indigo-900 dark:text-indigo-200">LifeHub Personal App v1.0.0</p>
+        <div class="p-4 rounded-3xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 text-center space-y-1">
+          <p class="text-xs font-bold text-indigo-900 dark:text-indigo-200">Patrick's App v1.0.0</p>
           <p class="text-[11px] text-slate-500 dark:text-slate-400">
-            模組化漸進架構 · 隨時可新增您專屬的下一個功能
+            專屬個人的模組化微應用中心 · 準備從零擴充自訂模組
           </p>
         </div>
       </div>
@@ -197,7 +193,7 @@ const SettingsModule = {
   },
 
   confirmClearData() {
-    if (confirm('警告：這將會清除本機所有資料並重置為預設狀態！您確定要繼續嗎？')) {
+    if (confirm('確定要清除所有本機資料並重置為預設狀態嗎？')) {
       StorageManager.clearAll();
       App.showToast('已重置所有本機資料', 'info');
       setTimeout(() => location.reload(), 500);

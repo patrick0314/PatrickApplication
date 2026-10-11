@@ -1,12 +1,12 @@
 {
-  "name": "LifeHub - 個人隨身工作站",
-  "short_name": "LifeHub",
-  "description": "個人專屬模組化行動應用，支援離線與靈活擴充",
+  "name": "Patrick's App",
+  "short_name": "Patrick's App",
+  "description": "Patrick 專屬個人客製化微應用工作站",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0f172a",
-  "theme_color": "#4f46e5",
+  "theme_color": "#4338ca",
   "orientation": "portrait-primary",
   "icons": [
     {
@@ -22,5 +22,5 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["productivity", "utilities"]
+  "categories": ["utilities", "lifestyle"]
 }
