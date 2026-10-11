@@ -2,6 +2,13 @@
 
 專為個人手機使用打造的**漸進式模組化行動應用（PWA）**。無須註冊登入、啟動飛快、支援離線運作，資料 100% 儲存在本機，並具備完整 JSON 匯出備份與還原機制。
 
+## 🌐 線上正式站點 (隨時隨地手機可用)
+
+🔗 **線上網址：** [https://patrick0314.github.io/PatrickApplication/](https://patrick0314.github.io/PatrickApplication/)
+
+- 任何外網、手機 4G/5G 皆可直接開啟。
+- 手機瀏覽器開啟後，點選 **「加入主畫面 (Add to Home Screen)」** 即可作為原生 App 離線使用。
+
 ---
 
 ## 🌟 核心特色
