@@ -96,6 +96,10 @@ const StorageManager = {
     if (!this.get('installed_modules')) {
       this.set('installed_modules', []);
     }
+
+    if (!this.get('favorites')) {
+      this.set('favorites', []);
+    }
   },
 
   // Clear all local application storage and restore to original default
