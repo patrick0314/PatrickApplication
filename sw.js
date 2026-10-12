@@ -1,4 +1,4 @@
-const CACHE_NAME = 'my-app-v27';
+const CACHE_NAME = 'my-app-v28';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const ASSETS_TO_CACHE = [
   './js/app.js',
   './js/modules/dashboard.js',
   './js/modules/werewolf.js',
+  './js/modules/codenames.js',
   './js/modules/settings.js',
   './icons/icon-192.png',
   './icons/icon-512.png',

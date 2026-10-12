@@ -24,6 +24,13 @@ const App = {
       init: () => WerewolfModule.init()
     },
     {
+      id: 'codenames',
+      name: '機密代號',
+      icon: 'key',
+      render: () => CodenamesModule.render(),
+      init: () => CodenamesModule.init()
+    },
+    {
       id: 'settings',
       name: '設定',
       icon: 'settings',
@@ -141,7 +148,7 @@ const App = {
     const displayedModules = this.modules.filter(m => this.navTabs.includes(m.id));
 
     navContainer.innerHTML = displayedModules.map(mod => {
-      const isActive = mod.id === this.activeTab || (mod.id === 'dashboard' && this.activeTab === 'werewolf');
+      const isActive = mod.id === this.activeTab || (mod.id === 'dashboard' && (this.activeTab === 'werewolf' || this.activeTab === 'codenames'));
       const badgeCount = mod.badge ? mod.badge() : 0;
 
       return `
