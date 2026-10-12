@@ -1045,9 +1045,6 @@ const WerewolfModule = {
             <i data-lucide="chevron-left" class="w-4 h-4"></i>
             <span>返回功能列表</span>
           </button>
-          <span class="text-[10px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-900/40">
-            多人即時連線 v1.0
-          </span>
         </div>
 
         <!-- Werewolf Hero Banner -->
@@ -1059,11 +1056,6 @@ const WerewolfModule = {
             </div>
 
             <h1 class="text-2xl font-black tracking-tight text-white">一夜狼人殺</h1>
-
-            <div class="mt-3 inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold">
-              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>WSS 加密通道已就緒 (延遲 < 50ms)</span>
-            </div>
           </div>
 
           <div class="absolute -right-10 -bottom-10 h-36 w-36 rounded-full bg-indigo-600/20 blur-2xl"></div>
@@ -1124,6 +1116,20 @@ const WerewolfModule = {
                 加入
               </button>
             </div>
+          </div>
+        </div>
+
+        <!-- Werewolf Quick Rules Card -->
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+          <div class="flex items-center space-x-2">
+            <i data-lucide="book-open" class="w-4 h-4 text-indigo-500"></i>
+            <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200">遊戲規則速覽</h3>
+          </div>
+          <div class="space-y-2 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+            <p>• <b>人數與牌數</b>：每局使用人數 ＋ 3 張角色牌（3 張置於中央底牌），整場遊戲僅經歷一個夜晚與一個白天。</p>
+            <p>• <b>夜晚行動</b>：各特殊角色依固定順序睜眼發動技能（查看、交換角色卡等），身分可能在不知情下被轉變。</p>
+            <p>• <b>白天討論</b>：全員醒來進行自由辯論、推推理實與試探彼此真實身分，可宣稱或隱瞞自己最初知曉的角色。</p>
+            <p>• <b>放逐投票</b>：計時結束後全員同時投票，得票最高者被處決；若處決至少一名狼人則村民陣營獲勝，否則狼人獲勝。</p>
           </div>
         </div>
 

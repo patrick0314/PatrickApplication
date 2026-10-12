@@ -244,8 +244,33 @@ const CodenamesModule = {
           break;
 
         case 'PLAYER_LEAVE':
+          const leftPlayer = this.state.players.find(p => p.id === data.playerId);
+          const wasHost = leftPlayer ? leftPlayer.isHost : false;
           this.state.players = this.state.players.filter(p => p.id !== data.playerId);
-          App.showToast(`${data.playerName} 離開了房間`, 'info');
+          App.showToast(`${data.playerName || '玩家'} 離開了房間`, 'info');
+
+          if (wasHost && this.state.players.length > 0) {
+            this.state.players[0].isHost = true;
+            if (this.state.players[0].id === this.state.myPlayerId) {
+              this.state.isHost = true;
+              App.showToast('原房主已離開，您已成為新房主 👑', 'info');
+              this.broadcast({
+                type: 'SYNC_STATE',
+                players: this.state.players,
+                hostId: this.state.myPlayerId,
+                gamePhase: this.state.gamePhase,
+                gameData: this.state.gameData
+              });
+            }
+          } else if (this.state.isHost) {
+            this.broadcast({
+              type: 'SYNC_STATE',
+              players: this.state.players,
+              hostId: this.state.myPlayerId,
+              gamePhase: this.state.gamePhase,
+              gameData: this.state.gameData
+            });
+          }
           this.updateRoomUI();
           break;
 
@@ -435,6 +460,113 @@ const CodenamesModule = {
     this.updateRoomUI();
   },
 
+  // 隨機分隊 (房主專屬：分配兩隊隊長與隊員)
+  randomAssignTeams() {
+    if (!this.state.isHost) {
+      App.showToast('只有房主可以進行隨機分隊', 'warning');
+      return;
+    }
+    const players = [...this.state.players];
+    if (players.length < 2) {
+      App.showToast('房間人數不足，至少需 2 人才能進行分隊', 'warning');
+      return;
+    }
+
+    // Fisher-Yates shuffle 洗牌
+    for (let i = players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [players[i], players[j]] = [players[j], players[i]];
+    }
+
+    // 隊長有且只有一人，其餘平均分配到兩隊隊員
+    // 第 1 位玩家：紅隊隊長
+    players[0].team = 'red';
+    players[0].role = 'spymaster';
+
+    // 第 2 位玩家：藍隊隊長
+    players[1].team = 'blue';
+    players[1].role = 'spymaster';
+
+    // 第 3 位以後玩家：平均分配至紅隊隊員與藍隊隊員
+    for (let i = 2; i < players.length; i++) {
+      players[i].team = (i % 2 === 0) ? 'red' : 'blue';
+      players[i].role = 'operative';
+    }
+
+    this.state.players = players;
+    const me = players.find(p => p.id === this.state.myPlayerId);
+    if (me) {
+      this.state.myTeam = me.team;
+      this.state.myRole = me.role;
+    }
+
+    if ('vibrate' in navigator) navigator.vibrate([30, 40, 30]);
+
+    this.broadcast({
+      type: 'SYNC_STATE',
+      players: this.state.players,
+      hostId: this.state.myPlayerId,
+      gamePhase: this.state.gamePhase,
+      gameData: this.state.gameData
+    });
+
+    this.updateRoomUI();
+    App.showToast('🎲 已完成隨機分隊！', 'success');
+  },
+
+  // 檢查是否滿足開始遊戲條件 (四人以上且每個隊伍各身分皆有人選)
+  getGameStartStatus() {
+    const players = this.state.players;
+    const playerCount = players.length;
+    const hasRedSpymaster = players.some(p => p.team === 'red' && p.role === 'spymaster');
+    const hasRedOperative = players.some(p => p.team === 'red' && p.role === 'operative');
+    const hasBlueSpymaster = players.some(p => p.team === 'blue' && p.role === 'spymaster');
+    const hasBlueOperative = players.some(p => p.team === 'blue' && p.role === 'operative');
+
+    const missing = [];
+    if (playerCount < 4) {
+      missing.push(`房間人數需滿 4 人 (目前 ${playerCount}/4 人)`);
+    }
+
+    const missingRoles = [];
+    if (!hasRedSpymaster) missingRoles.push('紅隊隊長');
+    if (!hasRedOperative) missingRoles.push('紅隊隊員');
+    if (!hasBlueSpymaster) missingRoles.push('藍隊隊長');
+    if (!hasBlueOperative) missingRoles.push('藍隊隊員');
+
+    if (missingRoles.length > 0) {
+      missing.push(`缺少：${missingRoles.join('、')}`);
+    }
+
+    const canStart = playerCount >= 4 && hasRedSpymaster && hasRedOperative && hasBlueSpymaster && hasBlueOperative;
+
+    return {
+      canStart,
+      playerCount,
+      hasRedSpymaster,
+      hasRedOperative,
+      hasBlueSpymaster,
+      hasBlueOperative,
+      missing,
+      hintText: missing.join('，')
+    };
+  },
+
+  hostStartGame() {
+    if (!this.state.isHost) {
+      App.showToast('只有房主可以開始遊戲！', 'warning');
+      return;
+    }
+    const status = this.getGameStartStatus();
+    if (!status.canStart) {
+      App.showToast(`無法開始遊戲：${status.hintText}`, 'warning');
+      if ('vibrate' in navigator) navigator.vibrate([80, 40, 80]);
+      return;
+    }
+
+    App.showToast('盤面生成與遊戲互動流程準備就緒，請等待下一階段指示！', 'info');
+  },
+
   updateRoomUI() {
     if (this.state.currentView === 'room') {
       const container = document.getElementById('module-content');
@@ -466,13 +598,10 @@ const CodenamesModule = {
       <div class="space-y-5 fade-in pb-16">
         <!-- Back Navigation & Module Header -->
         <div class="flex items-center justify-between pt-1">
-          <button onclick="App.switchTab('dashboard')" class="flex items-center space-x-1 text-xs font-semibold text-rose-600 dark:text-rose-400 tap-scale">
+          <button onclick="App.switchTab('dashboard')" class="flex items-center space-x-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 tap-scale">
             <i data-lucide="chevron-left" class="w-4 h-4"></i>
             <span>返回功能列表</span>
           </button>
-          <span class="text-[10px] bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 font-bold px-2 py-0.5 rounded-full border border-rose-100 dark:border-rose-900/40">
-            多人即時連線 v1.0
-          </span>
         </div>
 
         <!-- Codenames Hero Banner -->
@@ -484,11 +613,6 @@ const CodenamesModule = {
             </div>
 
             <h1 class="text-2xl font-black tracking-tight text-white">機密代號</h1>
-
-            <div class="mt-3 inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold">
-              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>WSS 加密通道已就緒 (延遲 < 50ms)</span>
-            </div>
           </div>
 
           <!-- Red & Blue ambient light spots -->
@@ -499,15 +623,15 @@ const CodenamesModule = {
         <!-- Player Nickname Badge -->
         <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
           <div class="flex items-center space-x-3">
-            <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-rose-600 to-blue-600 text-white flex items-center justify-center font-black text-sm shadow-sm">
+            <div class="h-10 w-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm">
               ${(currentName || 'D').charAt(0).toUpperCase()}
             </div>
             <div>
               <p class="text-xs font-bold text-slate-900 dark:text-white">${currentName}</p>
-              <p class="text-[10px] text-slate-400">目前連線特務代號</p>
+              <p class="text-[10px] text-slate-400">目前連線玩家身分</p>
             </div>
           </div>
-          <button onclick="CodenamesModule.promptChangeName()" class="text-xs text-rose-600 dark:text-rose-400 font-semibold px-2.5 py-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 tap-scale">
+          <button onclick="CodenamesModule.promptChangeName()" class="text-xs text-indigo-600 dark:text-indigo-400 font-semibold px-2.5 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 tap-scale">
             更換暱稱
           </button>
         </div>
@@ -515,14 +639,14 @@ const CodenamesModule = {
         <!-- Room Action Cards -->
         <div class="grid grid-cols-1 gap-3.5">
           <!-- Create Room -->
-          <button onclick="CodenamesModule.createRoom()" class="tap-scale flex items-center justify-between p-5 rounded-3xl bg-gradient-to-r from-rose-600 via-purple-600 to-blue-600 text-white shadow-lg shadow-purple-600/25 text-left">
+          <button onclick="CodenamesModule.createRoom()" class="tap-scale flex items-center justify-between p-5 rounded-3xl bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/25 text-left">
             <div class="flex items-center space-x-4">
               <div class="h-12 w-12 rounded-2xl bg-white/15 flex items-center justify-center text-white text-2xl shadow-inner">
                 👑
               </div>
               <div>
-                <h3 class="text-base font-black">建立特務頻道</h3>
-                <p class="text-xs text-rose-100 mt-0.5">擔任房主，產生專屬房間代碼給好友</p>
+                <h3 class="text-base font-black">創建新房間</h3>
+                <p class="text-xs text-indigo-200 mt-0.5">擔任房主，產生專屬房間代碼給好友</p>
               </div>
             </div>
             <i data-lucide="arrow-right" class="w-5 h-5 opacity-80"></i>
@@ -531,8 +655,8 @@ const CodenamesModule = {
           <!-- Join Room -->
           <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
             <div class="flex items-center space-x-2">
-              <i data-lucide="door-open" class="w-4 h-4 text-rose-500"></i>
-              <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200">加入特務頻道</h3>
+              <i data-lucide="door-open" class="w-4 h-4 text-indigo-500"></i>
+              <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200">加入已有房間</h3>
             </div>
             
             <div class="flex space-x-2">
@@ -540,9 +664,9 @@ const CodenamesModule = {
                 type="text" 
                 id="cn-join-room-input" 
                 maxlength="6"
-                placeholder="請輸入 4 位數房間代號 (如 7E2X)"
+                placeholder="請輸入 4 位數房間代號 (如 8F2A)"
                 value="${this.state.roomId || ''}"
-                class="flex-1 uppercase tracking-widest font-black px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-center"
+                class="flex-1 uppercase tracking-widest font-black px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-center"
               />
               <button 
                 onclick="CodenamesModule.joinRoom(document.getElementById('cn-join-room-input').value)" 
@@ -581,6 +705,9 @@ const CodenamesModule = {
 
     const redSpymaster = redPlayers.find(p => p.role === 'spymaster');
     const blueSpymaster = bluePlayers.find(p => p.role === 'spymaster');
+
+    const status = this.getGameStartStatus();
+    const canStart = status.canStart;
 
     return `
       <div class="space-y-4 fade-in pb-20">
@@ -742,19 +869,41 @@ const CodenamesModule = {
         </div>
 
         <!-- Host Action Container -->
-        <div class="pt-2">
+        <div class="pt-2 space-y-2.5">
           ${isHost ? `
+            <!-- 隨機分隊按鈕 (房主專屬) -->
             <button 
-              onclick="App.showToast('盤面生成與遊戲互動流程準備就緒，請等待下一階段指示！', 'info')" 
-              class="tap-scale w-full py-4 rounded-2xl bg-gradient-to-r from-rose-600 via-purple-600 to-blue-600 text-white font-black text-sm shadow-xl shadow-purple-600/30 flex items-center justify-center space-x-2"
+              onclick="CodenamesModule.randomAssignTeams()" 
+              class="tap-scale w-full py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 font-bold text-xs border border-slate-200 dark:border-slate-700 flex items-center justify-center space-x-2 shadow-sm transition"
+            >
+              <i data-lucide="shuffle" class="w-4 h-4 text-indigo-500"></i>
+              <span>隨機分隊</span>
+            </button>
+
+            <!-- 開始遊戲按鈕 -->
+            <button 
+              onclick="CodenamesModule.hostStartGame()" 
+              ${!canStart ? 'disabled' : ''}
+              class="tap-scale w-full py-4 rounded-2xl ${
+                canStart 
+                  ? 'bg-gradient-to-r from-rose-600 via-purple-600 to-blue-600 text-white font-black text-sm shadow-xl shadow-purple-600/30' 
+                  : 'bg-slate-200 dark:bg-slate-800/80 text-slate-400 dark:text-slate-500 font-bold text-sm cursor-not-allowed opacity-60'
+              } flex items-center justify-center space-x-2 transition"
             >
               <i data-lucide="play" class="w-5 h-5"></i>
-              <span>開始遊戲 (準備中)</span>
+              <span>開始遊戲</span>
             </button>
+
+            <!-- 狀態提示小字 -->
+            <p class="text-[11px] text-center ${canStart ? 'text-emerald-500 font-bold' : 'text-slate-400 dark:text-slate-500'}">
+              ${canStart ? '✨ 人數與身分已全員齊全，隨時可開局！' : `⚠️ ${status.hintText}`}
+            </p>
           ` : `
-            <div class="p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 text-center">
-              <p class="text-xs font-bold text-slate-600 dark:text-slate-300">等待房主開始遊戲...</p>
-              <p class="text-[10px] text-slate-400 mt-0.5">您可以先在上方面板選擇您的所屬陣營與特務職位</p>
+            <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 text-center space-y-1">
+              <p class="text-xs font-bold text-slate-700 dark:text-slate-300">等待房主開始遊戲...</p>
+              <p class="text-[10px] ${canStart ? 'text-emerald-500 font-bold' : 'text-slate-400'}">
+                ${canStart ? '✨ 人員已齊全，等待房主開局' : `尚未就緒：${status.hintText}`}
+              </p>
             </div>
           `}
         </div>
