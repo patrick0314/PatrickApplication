@@ -26,11 +26,15 @@ const CodenamesModule = {
     brokerIndex: 0,
     lastReactionTime: 0,
     gamePhase: 'waiting', // 'waiting' | 'clue' | 'guess' | 'game_over'
-    gameData: null
+    gameData: null,
+    previewAsOperative: false,
+    clueInputWord: '',
+    clueInputCount: 1
   },
 
   _reactionTimer: null,
   _pingInterval: null,
+  _visibilityBound: false,
 
   brokers: [
     'wss://broker.emqx.io:8084/mqtt',
@@ -99,6 +103,17 @@ const CodenamesModule = {
         sessionStorage.setItem('codenames_player_id', pid);
       }
       this.state.myPlayerId = pid;
+    }
+
+    if (!this._visibilityBound) {
+      this._visibilityBound = true;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && (this.state.currentView === 'room' || this.state.currentView === 'game') && this.state.roomId && this.state.client) {
+          if (!this.state.isHost) {
+            this.broadcast({ type: 'REQUEST_SYNC' });
+          }
+        }
+      });
     }
   },
 
@@ -225,6 +240,7 @@ const CodenamesModule = {
             this.state.players = currentPlayers;
             this.state.isHost = (data.hostId === this.state.myPlayerId);
           }
+          if (data.currentView) this.state.currentView = data.currentView;
           if (data.gamePhase) this.state.gamePhase = data.gamePhase;
           if (data.gameData) this.state.gameData = data.gameData;
           this.updateRoomUI();
@@ -258,6 +274,7 @@ const CodenamesModule = {
                 type: 'SYNC_STATE',
                 players: this.state.players,
                 hostId: this.state.myPlayerId,
+                currentView: this.state.currentView,
                 gamePhase: this.state.gamePhase,
                 gameData: this.state.gameData
               });
@@ -267,6 +284,7 @@ const CodenamesModule = {
               type: 'SYNC_STATE',
               players: this.state.players,
               hostId: this.state.myPlayerId,
+              currentView: this.state.currentView,
               gamePhase: this.state.gamePhase,
               gameData: this.state.gameData
             });
@@ -274,10 +292,86 @@ const CodenamesModule = {
           this.updateRoomUI();
           break;
 
+        case 'REQUEST_SYNC':
+          if (this.state.isHost) {
+            this.broadcast({
+              type: 'SYNC_STATE',
+              players: this.state.players,
+              hostId: this.state.myPlayerId,
+              currentView: this.state.currentView,
+              gamePhase: this.state.gamePhase,
+              gameData: this.state.gameData
+            });
+          }
+          break;
+
+        case 'GAME_START':
+          this.state.currentView = 'game';
+          this.state.gamePhase = data.gameData.turnPhase || 'clue';
+          this.state.gameData = data.gameData;
+          if (data.players) this.state.players = data.players;
+          if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
+          App.showToast(`機密代號已啟動！由 ${data.gameData.startingTeam === 'red' ? '🔴 紅隊' : '🔵 藍隊'} 先手`, 'info');
+          this.renderView();
+          break;
+
+        case 'CLUE_SUBMITTED':
+          if (this.state.gameData) {
+            this.state.gameData.currentClue = data.clue;
+            this.state.gameData.turnPhase = 'guess';
+            this.state.gameData.remainingGuesses = data.remainingGuesses;
+            if (data.logs) this.state.gameData.logs = data.logs;
+            if ('vibrate' in navigator) navigator.vibrate([40, 30, 40]);
+            App.showToast(`${data.team === 'red' ? '🔴 紅隊' : '🔵 藍隊'} 隊長提供線索：【${data.clue.word}】（${data.clue.count} 張）`, 'info');
+            this.updateRoomUI();
+          }
+          break;
+
+        case 'CARD_GUESSED':
+          if (this.state.gameData) {
+            this.state.gameData = data.gameData;
+            if ('vibrate' in navigator) navigator.vibrate(50);
+            if (data.toastMessage) {
+              App.showToast(data.toastMessage, data.toastType || 'info');
+            }
+            this.updateRoomUI();
+          }
+          break;
+
+        case 'TURN_ENDED':
+          if (this.state.gameData) {
+            this.state.gameData = data.gameData;
+            if ('vibrate' in navigator) navigator.vibrate(40);
+            App.showToast(`已換隊！輪到 ${data.gameData.currentTurnTeam === 'red' ? '🔴 紅隊' : '🔵 藍隊'} 回合`, 'info');
+            this.updateRoomUI();
+          }
+          break;
+
+        case 'RESET_GAME':
+          this.state.currentView = 'game';
+          this.state.gameData = data.gameData;
+          if ('vibrate' in navigator) navigator.vibrate([80, 40, 80]);
+          App.showToast('房主重新開了新的一局！🎲', 'success');
+          this.renderView();
+          break;
+
+        case 'BACK_TO_ROOM':
+          this.state.currentView = 'room';
+          this.state.gamePhase = 'waiting';
+          this.state.gameData = null;
+          App.showToast('已返回房間等待室', 'info');
+          this.renderView();
+          break;
+
+        case 'REACTION':
+          if (data.fromId === this.state.myPlayerId) return;
+          this.showFloatingReaction(data.emoji, data.fromName);
+          break;
+
         case 'PING':
           if (data.from === this.state.myPlayerId && data.ts) {
             this.state.ping = Date.now() - data.ts;
-            const pingEl = document.getElementById('cn-room-ping-val');
+            const pingEl = document.getElementById('cn-room-ping-val') || document.getElementById('cn-game-ping-val');
             if (pingEl) pingEl.textContent = `${this.state.ping}ms`;
           }
           break;
@@ -564,21 +658,478 @@ const CodenamesModule = {
       return;
     }
 
-    App.showToast('盤面生成與遊戲互動流程準備就緒，請等待下一階段指示！', 'info');
+    // 1. 從 400 個標準官方中文詞彙庫中隨機抽選 25 張
+    const shuffledWords = [...this.WORD_POOL];
+    for (let i = shuffledWords.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledWords[i], shuffledWords[j]] = [shuffledWords[j], shuffledWords[i]];
+    }
+    const selectedWords = shuffledWords.slice(0, 25);
+
+    // 2. 隨機決定先手隊伍 (先手隊需猜 9 張，後手隊需猜 8 張)
+    const startingTeam = Math.random() < 0.5 ? 'red' : 'blue';
+    const secondTeam = (startingTeam === 'red' ? 'blue' : 'red');
+
+    // 3. 卡牌分配：先手 9 張、後手 8 張、平民 7 張、刺客 1 張 (合計 25 張)
+    const cardTypes = [
+      ...Array(9).fill(startingTeam),
+      ...Array(8).fill(secondTeam),
+      ...Array(7).fill('neutral'),
+      'assassin'
+    ];
+    for (let i = cardTypes.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cardTypes[i], cardTypes[j]] = [cardTypes[j], cardTypes[i]];
+    }
+
+    // 4. 組裝 25 張特務代號卡
+    const cards = selectedWords.map((word, idx) => ({
+      id: idx,
+      word: word,
+      type: cardTypes[idx], // 'red' | 'blue' | 'neutral' | 'assassin'
+      revealed: false,
+      revealedBy: null,
+      revealedTeam: null
+    }));
+
+    const gameData = {
+      cards: cards,
+      startingTeam: startingTeam,
+      currentTurnTeam: startingTeam,
+      turnPhase: 'clue', // 'clue' | 'guess' | 'game_over'
+      redRemaining: (startingTeam === 'red' ? 9 : 8),
+      blueRemaining: (startingTeam === 'blue' ? 9 : 8),
+      currentClue: null,
+      remainingGuesses: 0,
+      turnNumber: 1,
+      winner: null,
+      winReason: '',
+      logs: [
+        {
+          time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+          text: `遊戲開局！由 ${startingTeam === 'red' ? '🔴 紅隊' : '🔵 藍隊'} 先手（需找出 9 張特務牌）。`
+        }
+      ]
+    };
+
+    this.state.currentView = 'game';
+    this.state.gamePhase = 'clue';
+    this.state.gameData = gameData;
+    this.state.clueInputWord = '';
+    this.state.clueInputCount = 1;
+    this.state.previewAsOperative = false;
+
+    if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
+
+    this.broadcast({
+      type: 'GAME_START',
+      gameData: this.state.gameData,
+      players: this.state.players
+    });
+
+    this.renderView();
+    App.showToast(`遊戲開始！由 ${startingTeam === 'red' ? '🔴 紅隊' : '🔵 藍隊'} 先手開局`, 'success');
+  },
+
+  submitClue() {
+    const gameData = this.state.gameData;
+    if (!gameData || gameData.turnPhase !== 'clue') return;
+    if (gameData.currentTurnTeam !== this.state.myTeam || this.state.myRole !== 'spymaster') {
+      App.showToast('現在不是您的給予線索回合', 'warning');
+      return;
+    }
+
+    const wordInput = document.getElementById('cn-clue-word-input');
+    const countInput = document.getElementById('cn-clue-count-input');
+
+    const clueWord = (wordInput ? wordInput.value : this.state.clueInputWord || '').trim();
+    const clueCount = parseInt(countInput ? countInput.value : this.state.clueInputCount || 1, 10);
+
+    if (!clueWord) {
+      App.showToast('請輸入提示詞！', 'warning');
+      if (wordInput) wordInput.focus();
+      return;
+    }
+
+    if (/\s/.test(clueWord)) {
+      App.showToast('提示詞必須為單一詞彙，不可包含空格！', 'warning');
+      return;
+    }
+
+    // 檢查提示詞是否為場上未翻開的牌面詞
+    const unrevealedBoardWords = gameData.cards.filter(c => !c.revealed).map(c => c.word);
+    if (unrevealedBoardWords.some(w => w === clueWord)) {
+      App.showToast(`提示詞不可直接使用場上未翻開的代號「${clueWord}」！`, 'warning');
+      return;
+    }
+
+    if (isNaN(clueCount) || clueCount < 1 || clueCount > 9) {
+      App.showToast('關聯數量請設定為 1 到 9 張！', 'warning');
+      return;
+    }
+
+    const teamLabel = (this.state.myTeam === 'red' ? '🔴 紅隊' : '🔵 藍隊');
+    gameData.currentClue = {
+      word: clueWord,
+      count: clueCount,
+      givenBy: this.state.myPlayerName
+    };
+    gameData.turnPhase = 'guess';
+    gameData.remainingGuesses = clueCount + 1;
+
+    gameData.logs.unshift({
+      time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+      text: `${teamLabel} 隊長 ${this.state.myPlayerName} 提供線索：【${clueWord}】（${clueCount} 張）`
+    });
+
+    if ('vibrate' in navigator) navigator.vibrate([40, 30, 40]);
+
+    this.broadcast({
+      type: 'CLUE_SUBMITTED',
+      team: this.state.myTeam,
+      clue: gameData.currentClue,
+      remainingGuesses: gameData.remainingGuesses,
+      logs: gameData.logs
+    });
+
+    this.updateRoomUI();
+    App.showToast(`已發送線索【${clueWord}】！隊員可開始猜測`, 'success');
+  },
+
+  guessCard(cardId) {
+    const gameData = this.state.gameData;
+    if (!gameData || gameData.turnPhase !== 'guess') return;
+    if (gameData.currentTurnTeam !== this.state.myTeam || this.state.myRole !== 'operative') {
+      App.showToast('只有當前行動隊伍的隊員可以點擊猜測！', 'warning');
+      return;
+    }
+
+    const card = gameData.cards.find(c => c.id === cardId);
+    if (!card || card.revealed) return;
+
+    App.confirm({
+      title: `確定要猜測「${card.word}」嗎？`,
+      confirmText: '確定猜測',
+      cancelText: '再想想',
+      onConfirm: () => {
+        card.revealed = true;
+        card.revealedBy = this.state.myPlayerName;
+        card.revealedTeam = this.state.myTeam;
+
+        const myTeamLabel = (this.state.myTeam === 'red' ? '🔴 紅隊' : '🔵 藍隊');
+        const opponentTeam = (this.state.myTeam === 'red' ? 'blue' : 'red');
+        const opponentTeamLabel = (opponentTeam === 'red' ? '🔴 紅隊' : '🔵 藍隊');
+
+        let toastMsg = '';
+        let toastType = 'info';
+
+        if (card.type === 'assassin') {
+          // 誤觸刺客，當場落敗！
+          gameData.winner = opponentTeam;
+          gameData.winReason = `${myTeamLabel} 誤觸刺客（💀）！${opponentTeamLabel} 獲得勝利！`;
+          gameData.turnPhase = 'game_over';
+
+          gameData.logs.unshift({
+            time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+            text: `💀 致命失誤！${this.state.myPlayerName} 點中了刺客【${card.word}】，遊戲結束，${opponentTeamLabel} 獲勝！`
+          });
+
+          toastMsg = `💀 翻出刺客【${card.word}】！${opponentTeamLabel} 獲勝！`;
+          toastType = 'error';
+          if ('vibrate' in navigator) navigator.vibrate([200, 100, 200, 100, 400]);
+        } else if (card.type === this.state.myTeam) {
+          // 答對本隊特務
+          if (this.state.myTeam === 'red') gameData.redRemaining--;
+          else gameData.blueRemaining--;
+
+          gameData.logs.unshift({
+            time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+            text: `🎯 答對！${this.state.myPlayerName} 翻出本隊特務【${card.word}】！`
+          });
+
+          // 檢查是否獲勝
+          if (gameData.redRemaining === 0) {
+            gameData.winner = 'red';
+            gameData.winReason = '🔴 紅隊率先找出所有特務牌，贏得勝利！🎉';
+            gameData.turnPhase = 'game_over';
+            toastMsg = '🎉 紅隊已找齊所有特務，獲得勝利！';
+            toastType = 'success';
+          } else if (gameData.blueRemaining === 0) {
+            gameData.winner = 'blue';
+            gameData.winReason = '🔵 藍隊率先找出所有特務牌，贏得勝利！🎉';
+            gameData.turnPhase = 'game_over';
+            toastMsg = '🎉 藍隊已找齊所有特務，獲得勝利！';
+            toastType = 'success';
+          } else {
+            // 猜測成功且尚未結束，剩餘猜測次數 -1
+            gameData.remainingGuesses--;
+            if (gameData.remainingGuesses <= 0) {
+              gameData.logs.unshift({
+                time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+                text: `${myTeamLabel} 本回合猜測次數已用盡，換隊！`
+              });
+              this.switchTurn(gameData);
+              toastMsg = `🎯 答對【${card.word}】！次數已用盡，換隊。`;
+            } else {
+              toastMsg = `🎯 答對【${card.word}】！本回合還可猜測 ${gameData.remainingGuesses} 次。`;
+              toastType = 'success';
+            }
+          }
+          if ('vibrate' in navigator) navigator.vibrate([60, 40, 60]);
+        } else if (card.type === opponentTeam) {
+          // 猜到對方特務，對方得 1 分且立即換隊
+          if (opponentTeam === 'red') gameData.redRemaining--;
+          else gameData.blueRemaining--;
+
+          gameData.logs.unshift({
+            time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+            text: `⚠️ 失誤！${this.state.myPlayerName} 翻出了對手【${card.word}】，${opponentTeamLabel} 得 1 分！回合結束。`
+          });
+
+          // 檢查對方是否剛好湊齊獲勝
+          if (gameData.redRemaining === 0) {
+            gameData.winner = 'red';
+            gameData.winReason = '🔴 紅隊所有特務已現身，紅隊獲勝！🎉';
+            gameData.turnPhase = 'game_over';
+            toastMsg = '🔴 紅隊特務全員現身，紅隊獲勝！';
+          } else if (gameData.blueRemaining === 0) {
+            gameData.winner = 'blue';
+            gameData.winReason = '🔵 藍隊所有特務已現身，藍隊獲勝！🎉';
+            gameData.turnPhase = 'game_over';
+            toastMsg = '🔵 藍隊特務全員現身，藍隊獲勝！';
+          } else {
+            this.switchTurn(gameData);
+            toastMsg = `⚠️ 翻出對手特務【${card.word}】，回合結束！`;
+            toastType = 'warning';
+          }
+          if ('vibrate' in navigator) navigator.vibrate([150, 80]);
+        } else {
+          // 中立平民，立即換隊
+          gameData.logs.unshift({
+            time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+            text: `⚪ 翻出中立平民【${card.word}】！回合結束。`
+          });
+          this.switchTurn(gameData);
+          toastMsg = `⚪ 翻出平民【${card.word}】，換隊！`;
+          toastType = 'info';
+          if ('vibrate' in navigator) navigator.vibrate([80]);
+        }
+
+        this.broadcast({
+          type: 'CARD_GUESSED',
+          gameData: gameData,
+          cardId: cardId,
+          toastMessage: toastMsg,
+          toastType: toastType
+        });
+
+        this.updateRoomUI();
+        App.showToast(toastMsg, toastType);
+      }
+    });
+  },
+
+  endTurn() {
+    const gameData = this.state.gameData;
+    if (!gameData || gameData.turnPhase !== 'guess') return;
+    if (gameData.currentTurnTeam !== this.state.myTeam || this.state.myRole !== 'operative') {
+      App.showToast('現在不是您的猜測回合', 'warning');
+      return;
+    }
+
+    App.confirm({
+      title: '確定要結束本輪猜測嗎？',
+      confirmText: '結束猜測',
+      cancelText: '繼續猜測',
+      onConfirm: () => {
+        const teamLabel = (this.state.myTeam === 'red' ? '🔴 紅隊' : '🔵 藍隊');
+        gameData.logs.unshift({
+          time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+          text: `${teamLabel} 隊員 ${this.state.myPlayerName} 結束本輪猜測，換隊。`
+        });
+
+        this.switchTurn(gameData);
+
+        if ('vibrate' in navigator) navigator.vibrate(30);
+
+        this.broadcast({
+          type: 'TURN_ENDED',
+          gameData: gameData
+        });
+
+        this.updateRoomUI();
+        App.showToast('已結束本輪猜測，換隊！', 'info');
+      }
+    });
+  },
+
+  switchTurn(gameData) {
+    gameData.currentTurnTeam = (gameData.currentTurnTeam === 'red' ? 'blue' : 'red');
+    gameData.turnPhase = 'clue';
+    gameData.currentClue = null;
+    gameData.remainingGuesses = 0;
+    gameData.turnNumber = (gameData.turnNumber || 1) + 1;
+  },
+
+  setClueCount(delta) {
+    const input = document.getElementById('cn-clue-count-input');
+    if (!input) return;
+    let current = parseInt(input.value || '1', 10);
+    if (isNaN(current)) current = 1;
+    const next = Math.max(1, Math.min(9, current + delta));
+    input.value = next;
+    this.state.clueInputCount = next;
+  },
+
+  hostPlayAgain() {
+    if (!this.state.isHost) {
+      App.showToast('只有房主可以重新開始遊戲！', 'warning');
+      return;
+    }
+    this.hostStartGame();
+  },
+
+  hostBackToRoom() {
+    App.confirm({
+      title: '確定要結束對局並返回房間等待室嗎？',
+      confirmText: '返回等待室',
+      cancelText: '取消',
+      onConfirm: () => {
+        this.state.currentView = 'room';
+        this.state.gamePhase = 'waiting';
+        this.state.gameData = null;
+        this.broadcast({
+          type: 'BACK_TO_ROOM'
+        });
+        this.renderView();
+        App.showToast('已返回房間等待室', 'info');
+      }
+    });
+  },
+
+  leaveGame() {
+    App.confirm({
+      title: '確定要退出當前房間嗎？',
+      confirmText: '退出房間',
+      cancelText: '取消',
+      isDestructive: true,
+      onConfirm: () => {
+        this.leaveRoom();
+      }
+    });
+  },
+
+  toggleSpymasterPreview() {
+    this.state.previewAsOperative = !this.state.previewAsOperative;
+    this.updateRoomUI();
+    App.showToast(this.state.previewAsOperative ? '已切換為「隊員視角預覽」👀' : '已切換為「隊長密碼圖視角」🕵️', 'info');
+  },
+
+  sendReaction(emoji) {
+    const now = Date.now();
+    const elapsed = now - (this.state.lastReactionTime || 0);
+    const cooldownMs = 10000;
+
+    if (elapsed < cooldownMs) {
+      const remainingSec = Math.ceil((cooldownMs - elapsed) / 1000);
+      App.showToast(`表情冷卻中，請等待 ${remainingSec} 秒 ⏳`, 'info');
+      if ('vibrate' in navigator) navigator.vibrate(40);
+      return;
+    }
+
+    this.state.lastReactionTime = now;
+    this.startReactionCooldown();
+
+    if ('vibrate' in navigator) navigator.vibrate(25);
+
+    this.broadcast({
+      type: 'REACTION',
+      fromId: this.state.myPlayerId,
+      fromName: this.state.myPlayerName,
+      emoji: emoji
+    });
+
+    this.showFloatingReaction(emoji, '我');
+  },
+
+  startReactionCooldown() {
+    if (this._reactionTimer) {
+      clearInterval(this._reactionTimer);
+      this._reactionTimer = null;
+    }
+
+    const updateCooldownUI = () => {
+      const now = Date.now();
+      const elapsed = now - (this.state.lastReactionTime || 0);
+      const remainingSec = Math.ceil((10000 - elapsed) / 1000);
+      const hint = document.getElementById('cn-reaction-hint-text');
+      const btns = document.querySelectorAll('.cn-reaction-btn');
+
+      if (remainingSec <= 0) {
+        if (this._reactionTimer) {
+          clearInterval(this._reactionTimer);
+          this._reactionTimer = null;
+        }
+        if (hint) {
+          hint.textContent = '點擊即時廣播全體特務';
+          hint.className = 'text-[10px] text-slate-400';
+        }
+        btns.forEach(b => {
+          b.classList.remove('opacity-40', 'cursor-not-allowed');
+          b.classList.add('hover:scale-125');
+        });
+      } else {
+        if (hint) {
+          hint.textContent = `⏳ 冷卻中 (${remainingSec} 秒)`;
+          hint.className = 'text-[10px] font-bold text-amber-500 animate-pulse';
+        }
+        btns.forEach(b => {
+          b.classList.add('opacity-40', 'cursor-not-allowed');
+          b.classList.remove('hover:scale-125');
+        });
+      }
+    };
+
+    updateCooldownUI();
+    this._reactionTimer = setInterval(updateCooldownUI, 500);
+  },
+
+  showFloatingReaction(emoji, fromName) {
+    const container = document.getElementById('floating-reactions');
+    if (!container) return;
+
+    const offset = Math.floor(Math.random() * 40) - 20;
+    const el = document.createElement('div');
+    el.className = 'absolute right-6 bottom-24 flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/95 text-white text-xs font-bold shadow-2xl border border-white/20 animate-bounce pointer-events-none z-50 transition-all';
+    el.style.transform = `translateX(${offset}px)`;
+    el.innerHTML = `<span class="text-xl">${emoji}</span><span class="text-[11px] opacity-90">${fromName}</span>`;
+    container.appendChild(el);
+
+    setTimeout(() => {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    }, 2200);
   },
 
   updateRoomUI() {
+    const container = document.getElementById('module-content');
+    if (!container) return;
+
+    if (this.state.currentView === 'game') {
+      container.innerHTML = this.renderGameView();
+      if (window.lucide) lucide.createIcons();
+      return;
+    }
     if (this.state.currentView === 'room') {
-      const container = document.getElementById('module-content');
-      if (container) {
-        container.innerHTML = this.renderRoomView();
-        if (window.lucide) lucide.createIcons();
-      }
+      container.innerHTML = this.renderRoomView();
+      if (window.lucide) lucide.createIcons();
     }
   },
 
   render() {
     this.init();
+    if (this.state.currentView === 'game' && this.state.roomId) {
+      return this.renderGameView();
+    }
     if (this.state.currentView === 'room' && this.state.roomId) {
       return this.renderRoomView();
     }
@@ -906,6 +1457,489 @@ const CodenamesModule = {
               </p>
             </div>
           `}
+        </div>
+      </div>
+    `;
+  },
+
+  // View 3: Game Screen (機密代號對局主畫面)
+  renderGameView() {
+    const gameData = this.state.gameData;
+    if (!gameData) {
+      return this.renderRoomView();
+    }
+
+    const myTeam = this.state.myTeam;
+    const myRole = this.state.myRole;
+    const isGameOver = (gameData.turnPhase === 'game_over');
+    const isRedTurn = (gameData.currentTurnTeam === 'red');
+    const isBlueTurn = (gameData.currentTurnTeam === 'blue');
+
+    const redPlayers = this.state.players.filter(p => p.team === 'red');
+    const bluePlayers = this.state.players.filter(p => p.team === 'blue');
+    const redSpymaster = redPlayers.find(p => p.role === 'spymaster');
+    const blueSpymaster = bluePlayers.find(p => p.role === 'spymaster');
+    const redOperatives = redPlayers.filter(p => p.role === 'operative');
+    const blueOperatives = bluePlayers.filter(p => p.role === 'operative');
+
+    return `
+      <div class="relative space-y-3.5 fade-in pb-16" id="cn-game-container">
+        <!-- Floating Reactions Container -->
+        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
+
+        <!-- Top Header Bar -->
+        <div class="flex items-center justify-between pt-1">
+          <button onclick="CodenamesModule.leaveGame()" class="flex items-center space-x-1 text-xs font-bold text-red-500 hover:text-red-600 tap-scale">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+            <span>退出房間</span>
+          </button>
+
+          <div class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+            <span>房間 #${this.state.roomId}</span>
+            <span>·</span>
+            <span>第 ${gameData.turnNumber || 1} 回合</span>
+          </div>
+
+          <div class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-900/40 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+            <span id="cn-game-ping-val">${this.state.ping ? this.state.ping + 'ms' : '連線正常'}</span>
+          </div>
+        </div>
+
+        <!-- Game Over Banner (若勝負已分) -->
+        ${isGameOver ? this.renderGameOverBanner(gameData) : ''}
+
+        <!-- Dual Team Scoreboard (雙方陣營計分板) -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <!-- Red Team Box -->
+          <div class="rounded-2xl p-2.5 border transition-all ${
+            isRedTurn && !isGameOver
+              ? 'bg-rose-500/10 border-rose-500 shadow-md shadow-rose-500/20 ring-2 ring-rose-500/30' 
+              : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 opacity-80'
+          }">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-black text-rose-600 dark:text-rose-400 flex items-center space-x-1">
+                <span>🔴 紅隊</span>
+                ${isRedTurn && !isGameOver ? '<span class="text-[9px] bg-rose-500 text-white font-bold px-1.5 py-0.2 rounded-full animate-pulse">行動中</span>' : ''}
+              </span>
+              <span class="text-xs font-bold text-rose-700 dark:text-rose-300">
+                剩餘 <strong class="text-lg font-black">${gameData.redRemaining}</strong> 張
+              </span>
+            </div>
+            <div class="mt-1 flex items-center space-x-1 text-[9px] text-slate-500 dark:text-slate-400 truncate">
+              <span class="font-bold text-rose-600">隊長:</span>
+              <span class="truncate">${redSpymaster ? redSpymaster.name : '無'}</span>
+              <span class="opacity-40">|</span>
+              <span class="font-bold">隊員:</span>
+              <span class="truncate">${redOperatives.map(p => p.name).join('、') || '無'}</span>
+            </div>
+          </div>
+
+          <!-- Blue Team Box -->
+          <div class="rounded-2xl p-2.5 border transition-all ${
+            isBlueTurn && !isGameOver
+              ? 'bg-blue-500/10 border-blue-500 shadow-md shadow-blue-500/20 ring-2 ring-blue-500/30' 
+              : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 opacity-80'
+          }">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-black text-blue-600 dark:text-blue-400 flex items-center space-x-1">
+                <span>🔵 藍隊</span>
+                ${isBlueTurn && !isGameOver ? '<span class="text-[9px] bg-blue-500 text-white font-bold px-1.5 py-0.2 rounded-full animate-pulse">行動中</span>' : ''}
+              </span>
+              <span class="text-xs font-bold text-blue-700 dark:text-blue-300">
+                剩餘 <strong class="text-lg font-black">${gameData.blueRemaining}</strong> 張
+              </span>
+            </div>
+            <div class="mt-1 flex items-center space-x-1 text-[9px] text-slate-500 dark:text-slate-400 truncate">
+              <span class="font-bold text-blue-600">隊長:</span>
+              <span class="truncate">${blueSpymaster ? blueSpymaster.name : '無'}</span>
+              <span class="opacity-40">|</span>
+              <span class="font-bold">隊員:</span>
+              <span class="truncate">${blueOperatives.map(p => p.name).join('、') || '無'}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Current Turn & Clue Status Banner (回合狀態與線索提示) -->
+        ${!isGameOver ? `
+          <div class="rounded-2xl p-3 border shadow-xs ${
+            isRedTurn 
+              ? 'bg-rose-50/80 dark:bg-rose-950/25 border-rose-200 dark:border-rose-900/40 text-rose-950 dark:text-rose-100'
+              : 'bg-blue-50/80 dark:bg-blue-950/25 border-blue-200 dark:border-blue-900/40 text-blue-950 dark:text-blue-100'
+          }">
+            ${gameData.turnPhase === 'clue' ? `
+              <div class="flex items-center space-x-2">
+                <span class="text-base">⏳</span>
+                <div>
+                  <p class="text-xs font-black">
+                    ${isRedTurn ? '🔴 紅隊' : '🔵 藍隊'} 隊長提供線索中
+                  </p>
+                  <p class="text-[10px] text-slate-500 dark:text-slate-400">
+                    ${(myRole === 'spymaster' && ((isRedTurn && myTeam === 'red') || (isBlueTurn && myTeam === 'blue')))
+                      ? '👉 您是隊長！請檢視密碼圖，並在下方輸入提示詞與關聯張數。'
+                      : '隊長正在思考關聯詞，請稍候...'}
+                  </p>
+                </div>
+              </div>
+            ` : `
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="flex items-center space-x-2">
+                    <span class="text-xs font-black uppercase text-slate-400">當前線索</span>
+                    <span class="text-sm font-black text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-xs">
+                      【 ${gameData.currentClue?.word || ''} 】
+                    </span>
+                    <span class="text-xs font-bold">
+                      ${gameData.currentClue?.count || 1} 張
+                    </span>
+                  </div>
+                  <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                    本回合剩餘猜測：<strong class="text-indigo-600 dark:text-indigo-400 font-bold">${gameData.remainingGuesses}</strong> 次
+                  </p>
+                </div>
+                <div>
+                  ${(myRole === 'operative' && ((isRedTurn && myTeam === 'red') || (isBlueTurn && myTeam === 'blue'))) ? `
+                    <button onclick="CodenamesModule.endTurn()" class="tap-scale px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs">
+                      結束猜測
+                    </button>
+                  ` : ''}
+                </div>
+              </div>
+            `}
+          </div>
+        ` : ''}
+
+        <!-- My Identity & Spymaster Preview Toggle Bar -->
+        <div class="flex items-center justify-between px-1 text-[11px]">
+          <div class="flex items-center space-x-1.5 text-slate-600 dark:text-slate-300">
+            <span>您的身分：</span>
+            <strong class="${myTeam === 'red' ? 'text-rose-600' : myTeam === 'blue' ? 'text-blue-600' : 'text-slate-400'}">
+              ${myTeam === 'red' ? '🔴 紅隊' : myTeam === 'blue' ? '🔵 藍隊' : '觀戰'} · ${myRole === 'spymaster' ? '🕵️ 隊長' : '👤 隊員'}
+            </strong>
+          </div>
+
+          ${myRole === 'spymaster' ? `
+            <button onclick="CodenamesModule.toggleSpymasterPreview()" class="tap-scale flex items-center space-x-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+              <i data-lucide="${this.state.previewAsOperative ? 'eye-off' : 'eye'}" class="w-3.5 h-3.5"></i>
+              <span>${this.state.previewAsOperative ? '切回密碼圖' : '預覽隊員視角'}</span>
+            </button>
+          ` : ''}
+        </div>
+
+        <!-- 5x5 Card Grid (25 Cards) -->
+        ${this.renderCardGrid(gameData)}
+
+        <!-- Spymaster Clue Input Card (when clue phase) -->
+        ${this.renderClueInputForm(gameData)}
+
+        <!-- Operative Guess Action hint (when guess phase) -->
+        ${this.renderOperativeActions(gameData)}
+
+        <!-- Reactions & Logs -->
+        ${this.renderReactionsAndLogs(gameData)}
+      </div>
+    `;
+  },
+
+  renderGameOverBanner(gameData) {
+    if (gameData.turnPhase !== 'game_over') return '';
+    const isHost = this.state.isHost;
+    const isRedWin = (gameData.winner === 'red');
+
+    return `
+      <div class="rounded-3xl p-5 border shadow-xl text-center space-y-3.5 fade-in ${
+        isRedWin 
+          ? 'bg-gradient-to-br from-rose-950 via-slate-900 to-rose-950 text-white border-rose-600/60 shadow-rose-950/50' 
+          : 'bg-gradient-to-br from-blue-950 via-slate-900 to-blue-950 text-white border-blue-600/60 shadow-blue-950/50'
+      }">
+        <div class="text-4xl animate-bounce">🏆</div>
+        <div>
+          <h2 class="text-xl font-black text-white">
+            ${isRedWin ? '🔴 紅隊獲得最終勝利！' : '🔵 藍隊獲得最終勝利！'}
+          </h2>
+          <p class="text-xs text-slate-300 mt-1 leading-relaxed px-4">
+            ${gameData.winReason}
+          </p>
+        </div>
+
+        <div class="pt-2 flex items-center justify-center space-x-2.5">
+          ${isHost ? `
+            <button 
+              onclick="CodenamesModule.hostPlayAgain()" 
+              class="tap-scale px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-black text-xs shadow-lg shadow-emerald-500/25 flex items-center space-x-1.5"
+            >
+              <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+              <span>再來一局 (重新發牌)</span>
+            </button>
+            <button 
+              onclick="CodenamesModule.hostBackToRoom()" 
+              class="tap-scale px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20 flex items-center space-x-1"
+            >
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>
+              <span>返回等待室</span>
+            </button>
+          ` : `
+            <div class="text-xs text-slate-400">
+              等待房主開啟新對局或返回房間...
+            </div>
+            <button 
+              onclick="CodenamesModule.hostBackToRoom()" 
+              class="tap-scale px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20"
+            >
+              返回等待室
+            </button>
+          `}
+        </div>
+      </div>
+    `;
+  },
+
+  renderCardGrid(gameData) {
+    const myTeam = this.state.myTeam;
+    const myRole = this.state.myRole;
+    const isGameOver = (gameData.turnPhase === 'game_over');
+    const isSpymasterMode = (myRole === 'spymaster' && !this.state.previewAsOperative) || isGameOver;
+    const canIGuess = (!isGameOver && gameData.turnPhase === 'guess' && gameData.currentTurnTeam === myTeam && myRole === 'operative');
+
+    return `
+      <div class="grid grid-cols-5 gap-1.5 sm:gap-2 select-none" id="cn-card-grid">
+        ${gameData.cards.map((card) => {
+          const isRevealed = card.revealed;
+          
+          let cardStyle = '';
+          let badgeText = '';
+          let badgeClass = '';
+          let textStyle = '';
+          let onClickAttr = '';
+
+          if (isRevealed) {
+            // 已翻開
+            if (card.type === 'red') {
+              cardStyle = 'bg-gradient-to-br from-rose-500 to-rose-700 text-white border-2 border-rose-600 shadow-sm';
+              badgeText = '🔴 特務';
+              badgeClass = 'bg-white/20 text-white';
+              textStyle = 'text-white line-through opacity-90';
+            } else if (card.type === 'blue') {
+              cardStyle = 'bg-gradient-to-br from-blue-500 to-blue-700 text-white border-2 border-blue-600 shadow-sm';
+              badgeText = '🔵 特務';
+              badgeClass = 'bg-white/20 text-white';
+              textStyle = 'text-white line-through opacity-90';
+            } else if (card.type === 'neutral') {
+              cardStyle = 'bg-amber-100/80 dark:bg-slate-700/80 text-slate-500 dark:text-slate-400 border-2 border-amber-200 dark:border-slate-600';
+              badgeText = '平民';
+              badgeClass = 'bg-black/10 dark:bg-white/10 text-slate-600 dark:text-slate-300';
+              textStyle = 'text-slate-500 dark:text-slate-400 line-through opacity-70';
+            } else if (card.type === 'assassin') {
+              cardStyle = 'bg-slate-950 text-red-400 border-2 border-red-600 shadow-md shadow-red-950/40 ring-1 ring-red-500';
+              badgeText = '💀 刺客';
+              badgeClass = 'bg-red-500 text-white font-black';
+              textStyle = 'text-red-400 font-black';
+            }
+          } else {
+            // 未翻開
+            if (isSpymasterMode) {
+              // 隊長視角 (或遊戲結束全貌)
+              if (card.type === 'red') {
+                cardStyle = 'bg-rose-50/90 dark:bg-rose-950/40 border-2 border-rose-400 dark:border-rose-700/80 text-rose-900 dark:text-rose-200 shadow-xs';
+                badgeText = '🔴';
+                badgeClass = 'text-rose-600 dark:text-rose-400 font-black';
+                textStyle = 'text-rose-900 dark:text-rose-100 font-black';
+              } else if (card.type === 'blue') {
+                cardStyle = 'bg-blue-50/90 dark:bg-blue-950/40 border-2 border-blue-400 dark:border-blue-700/80 text-blue-900 dark:text-blue-200 shadow-xs';
+                badgeText = '🔵';
+                badgeClass = 'text-blue-600 dark:text-blue-400 font-black';
+                textStyle = 'text-blue-900 dark:text-blue-100 font-black';
+              } else if (card.type === 'neutral') {
+                cardStyle = 'bg-amber-50/50 dark:bg-slate-800/60 border-2 border-amber-200/60 dark:border-slate-700 text-slate-600 dark:text-slate-300';
+                badgeText = '⚪';
+                badgeClass = 'text-slate-400 font-bold';
+                textStyle = 'text-slate-700 dark:text-slate-300 font-bold';
+              } else if (card.type === 'assassin') {
+                cardStyle = 'bg-slate-900 border-2 border-red-500 text-white shadow-sm ring-1 ring-red-500/40';
+                badgeText = '💀';
+                badgeClass = 'text-red-400 font-black';
+                textStyle = 'text-red-400 font-black';
+              }
+            } else {
+              // 隊員視角 (未翻開)
+              cardStyle = 'bg-white dark:bg-slate-800/90 border-2 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white shadow-xs';
+              textStyle = 'text-slate-900 dark:text-white font-black';
+              if (canIGuess) {
+                cardStyle += ' tap-scale cursor-pointer hover:border-indigo-500 hover:shadow-md active:scale-95';
+                onClickAttr = `onclick="CodenamesModule.guessCard(${card.id})"`;
+              }
+            }
+          }
+
+          return `
+            <div 
+              ${onClickAttr}
+              class="relative flex flex-col items-center justify-center p-1.5 rounded-2xl h-[62px] sm:h-20 transition-all ${cardStyle}"
+            >
+              <!-- 頂部身分標記 -->
+              ${badgeText ? `
+                <div class="absolute top-1 right-1 text-[9px] px-1 py-0.2 rounded-md ${badgeClass}">
+                  ${badgeText}
+                </div>
+              ` : ''}
+
+              <!-- 翻開者小標籤 -->
+              ${isRevealed && card.revealedBy ? `
+                <div class="absolute bottom-1 left-1 right-1 text-[8px] text-center truncate opacity-75">
+                  ${card.revealedBy}
+                </div>
+              ` : ''}
+
+              <!-- 代號文字 -->
+              <span class="text-xs sm:text-sm tracking-wide text-center truncate max-w-full px-0.5 ${textStyle}">
+                ${card.word}
+              </span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  },
+
+  renderClueInputForm(gameData) {
+    const isMyTurn = (gameData.currentTurnTeam === this.state.myTeam && this.state.myRole === 'spymaster');
+    if (!isMyTurn || gameData.turnPhase !== 'clue') return '';
+
+    return `
+      <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/10 space-y-3.5 fade-in">
+        <div class="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+          <div class="flex items-center space-x-2">
+            <span class="text-base">🕵️</span>
+            <h3 class="text-xs font-bold text-slate-900 dark:text-white">隊長發布線索</h3>
+          </div>
+          <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-full">
+            輪到您給提示
+          </span>
+        </div>
+
+        <div class="space-y-2.5">
+          <!-- Clue Word Input -->
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">提示詞 (單一詞彙，不可包含空格或場上未翻開的詞)</label>
+            <input 
+              type="text" 
+              id="cn-clue-word-input" 
+              maxlength="10"
+              placeholder="請輸入提示詞 (例如：水果、武器、交通工具)..."
+              class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            />
+          </div>
+
+          <!-- Clue Count Picker -->
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">關聯卡牌數量 (1 ~ 9)</label>
+            <div class="flex items-center space-x-2">
+              <button 
+                type="button" 
+                onclick="CodenamesModule.setClueCount(-1)" 
+                class="tap-scale h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-base flex items-center justify-center shadow-xs"
+              >
+                -
+              </button>
+              <input 
+                type="number" 
+                id="cn-clue-count-input" 
+                min="1" 
+                max="9" 
+                value="1" 
+                class="flex-1 h-10 text-center font-black text-base rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+              <button 
+                type="button" 
+                onclick="CodenamesModule.setClueCount(1)" 
+                class="tap-scale h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-base flex items-center justify-center shadow-xs"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <button 
+            type="button" 
+            onclick="CodenamesModule.submitClue()" 
+            class="tap-scale w-full py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black text-xs shadow-md shadow-indigo-600/25 flex items-center justify-center space-x-1.5"
+          >
+            <i data-lucide="send" class="w-4 h-4"></i>
+            <span>正式發布線索給隊員</span>
+          </button>
+        </div>
+      </div>
+    `;
+  },
+
+  renderOperativeActions(gameData) {
+    const isMyTurn = (gameData.currentTurnTeam === this.state.myTeam && this.state.myRole === 'operative');
+    if (!isMyTurn || gameData.turnPhase !== 'guess') return '';
+
+    return `
+      <div class="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 flex items-center justify-between fade-in">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="alert-circle" class="w-4 h-4 text-amber-500 shrink-0"></i>
+          <span class="text-xs font-bold text-amber-800 dark:text-amber-300">
+            點擊上方卡牌猜測，若不想冒險可隨時結束
+          </span>
+        </div>
+        <button 
+          onclick="CodenamesModule.endTurn()" 
+          class="tap-scale px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm shrink-0"
+        >
+          結束猜測
+        </button>
+      </div>
+    `;
+  },
+
+  renderReactionsAndLogs(gameData) {
+    const now = Date.now();
+    const elapsed = now - (this.state.lastReactionTime || 0);
+    const isCoolingDown = elapsed < 10000;
+    const remainingSec = isCoolingDown ? Math.ceil((10000 - elapsed) / 1000) : 0;
+
+    if (isCoolingDown && !this._reactionTimer) {
+      setTimeout(() => this.startReactionCooldown(), 0);
+    }
+
+    return `
+      <!-- Quick Reactions Bar -->
+      <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-3 border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
+        <div class="flex items-center justify-between px-1">
+          <span class="text-[11px] font-bold text-slate-600 dark:text-slate-300">特務快捷表情互動</span>
+          <span id="cn-reaction-hint-text" class="text-[10px] ${isCoolingDown ? 'font-bold text-amber-500 animate-pulse' : 'text-slate-400'}">
+            ${isCoolingDown ? `⏳ 冷卻中 (${remainingSec} 秒)` : '點擊即時廣播全體特務'}
+          </span>
+        </div>
+        <div class="flex items-center justify-around py-0.5">
+          <button onclick="CodenamesModule.sendReaction('🕵️')" class="cn-reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="特務">🕵️</button>
+          <button onclick="CodenamesModule.sendReaction('🤫')" class="cn-reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="保密">🤫</button>
+          <button onclick="CodenamesModule.sendReaction('💡')" class="cn-reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="靈感">💡</button>
+          <button onclick="CodenamesModule.sendReaction('❓')" class="cn-reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="疑問">❓</button>
+          <button onclick="CodenamesModule.sendReaction('🎯')" class="cn-reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="命中">🎯</button>
+          <button onclick="CodenamesModule.sendReaction('💀')" class="cn-reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="刺客">💀</button>
+        </div>
+      </div>
+
+      <!-- Game Logs Accordion -->
+      <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-3.5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
+        <div class="flex items-center justify-between">
+          <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center space-x-1.5">
+            <i data-lucide="scroll" class="w-3.5 h-3.5 text-indigo-500"></i>
+            <span>對局行動歷程記錄</span>
+          </h4>
+          <span class="text-[10px] text-slate-400">${gameData.logs?.length || 0} 則動態</span>
+        </div>
+        <div class="max-h-36 overflow-y-auto space-y-1.5 text-[11px] pr-1">
+          ${(gameData.logs || []).map(log => `
+            <div class="flex items-start space-x-2 py-0.5 border-b border-slate-50 dark:border-slate-800/60 last:border-0">
+              <span class="text-[10px] text-slate-400 shrink-0 mt-0.5">${log.time}</span>
+              <span class="text-slate-700 dark:text-slate-300 leading-tight">${log.text}</span>
+            </div>
+          `).join('')}
         </div>
       </div>
     `;
