@@ -938,7 +938,7 @@ const WerewolfModule = {
       const elapsed = now - (this.state.lastReactionTime || 0);
       const remainingSec = Math.ceil((10000 - elapsed) / 1000);
       const hint = document.getElementById('reaction-hint-text');
-      const container = document.getElementById('reaction-buttons-container');
+      const btns = document.querySelectorAll('.reaction-btn');
 
       if (remainingSec <= 0) {
         if (this._reactionTimer) {
@@ -949,25 +949,19 @@ const WerewolfModule = {
           hint.textContent = '點擊即時廣播全體手機';
           hint.className = 'text-[10px] text-slate-400';
         }
-        if (container) {
-          const btns = container.querySelectorAll('.reaction-btn');
-          btns.forEach(b => {
-            b.classList.remove('opacity-40', 'cursor-not-allowed');
-            b.classList.add('hover:scale-125');
-          });
-        }
+        btns.forEach(b => {
+          b.classList.remove('opacity-40', 'cursor-not-allowed');
+          b.classList.add('hover:scale-125');
+        });
       } else {
         if (hint) {
           hint.textContent = `⏳ 冷卻中 (${remainingSec} 秒)`;
           hint.className = 'text-[10px] font-bold text-amber-500 animate-pulse';
         }
-        if (container) {
-          const btns = container.querySelectorAll('.reaction-btn');
-          btns.forEach(b => {
-            b.classList.add('opacity-40', 'cursor-not-allowed');
-            b.classList.remove('hover:scale-125');
-          });
-        }
+        btns.forEach(b => {
+          b.classList.add('opacity-40', 'cursor-not-allowed');
+          b.classList.remove('hover:scale-125');
+        });
       }
     };
 
@@ -1231,12 +1225,12 @@ const WerewolfModule = {
               </span>
             </div>
             <div id="reaction-buttons-container" class="flex items-center justify-around py-1">
-              <button onclick="WerewolfModule.sendReaction('🐺')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="狼嚎">🐺</button>
-              <button onclick="WerewolfModule.sendReaction('👀')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="懷疑">👀</button>
-              <button onclick="WerewolfModule.sendReaction('🔥')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="開戰">🔥</button>
-              <button onclick="WerewolfModule.sendReaction('👍')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="讚">👍</button>
-              <button onclick="WerewolfModule.sendReaction('❓')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="疑惑">❓</button>
-              <button onclick="WerewolfModule.sendReaction('💀')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="出局">💀</button>
+              <button onclick="WerewolfModule.sendReaction('🐺')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="狼人">🐺</button>
+              <button onclick="WerewolfModule.sendReaction('👀')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="眼睛">👀</button>
+              <button onclick="WerewolfModule.sendReaction('💯')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="100分">💯</button>
+              <button onclick="WerewolfModule.sendReaction('0️⃣')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="0分">0️⃣</button>
+              <button onclick="WerewolfModule.sendReaction('❓')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="問號">❓</button>
+              <button onclick="WerewolfModule.sendReaction('❗')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="驚嘆號">❗</button>
             </div>
           </div>
 
@@ -3211,12 +3205,12 @@ const WerewolfModule = {
             <span class="text-[10px] text-slate-400">點擊傳送</span>
           </div>
           <div class="flex items-center justify-around py-0.5">
-            <button onclick="WerewolfModule.sendReaction('🐺')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">🐺</button>
-            <button onclick="WerewolfModule.sendReaction('👀')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">👀</button>
-            <button onclick="WerewolfModule.sendReaction('🔥')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">🔥</button>
-            <button onclick="WerewolfModule.sendReaction('👍')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">👍</button>
-            <button onclick="WerewolfModule.sendReaction('❓')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">❓</button>
-            <button onclick="WerewolfModule.sendReaction('💀')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'}">💀</button>
+            <button onclick="WerewolfModule.sendReaction('🐺')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="狼人">🐺</button>
+            <button onclick="WerewolfModule.sendReaction('👀')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="眼睛">👀</button>
+            <button onclick="WerewolfModule.sendReaction('💯')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="100分">💯</button>
+            <button onclick="WerewolfModule.sendReaction('0️⃣')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="0分">0️⃣</button>
+            <button onclick="WerewolfModule.sendReaction('❓')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="問號">❓</button>
+            <button onclick="WerewolfModule.sendReaction('❗')" class="reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="驚嘆號">❗</button>
           </div>
         </div>
 
