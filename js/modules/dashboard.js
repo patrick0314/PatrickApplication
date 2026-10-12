@@ -19,7 +19,7 @@ const DashboardModule = {
       desc: '跨手機即時房間連線 · 支援 3~10 人',
       gradient: 'from-indigo-950 via-indigo-900 to-violet-900',
       shadow: 'shadow-indigo-900/30',
-      badgeClass: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-900/30',
+      badgeClass: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/30',
       action: () => App.switchTab('werewolf')
     },
     {
@@ -30,7 +30,7 @@ const DashboardModule = {
       desc: '紅藍陣營特務對決 · 支援 2~8+ 人',
       gradient: 'from-slate-900 via-rose-950 to-blue-950',
       shadow: 'shadow-blue-950/30',
-      badgeClass: 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200/50 dark:border-rose-900/30',
+      badgeClass: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/30',
       action: () => App.switchTab('codenames')
     }
   ],

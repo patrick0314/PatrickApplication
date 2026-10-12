@@ -993,18 +993,32 @@ const WerewolfModule = {
   },
 
   showFloatingReaction(emoji, fromName) {
-    const container = document.getElementById('floating-reactions');
-    if (!container) return;
+    let container = document.getElementById('global-floating-reactions');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'global-floating-reactions';
+      container.className = 'pointer-events-none fixed inset-x-0 bottom-0 top-0 max-w-md mx-auto z-50 overflow-hidden';
+      document.body.appendChild(container);
+    }
 
-    const offset = Math.floor(Math.random() * 40) - 20;
+    const existingCount = container.children.length;
+    // Calculate vertical position at screen bottom (just above bottom nav bar)
+    const bottomPx = 80 + ((existingCount % 5) * 44);
+    const offset = Math.floor(Math.random() * 24) - 12;
+
     const el = document.createElement('div');
-    el.className = 'absolute right-6 bottom-24 flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/95 text-white text-xs font-bold shadow-2xl border border-white/20 animate-bounce pointer-events-none z-50 transition-all';
+    el.className = 'absolute right-6 flex items-center space-x-2 px-3.5 py-2 rounded-full bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-bold shadow-2xl border border-white/20 animate-bounce pointer-events-none z-50 transition-all duration-300';
+    el.style.bottom = `${bottomPx}px`;
     el.style.transform = `translateX(${offset}px)`;
-    el.innerHTML = `<span class="text-xl">${emoji}</span><span class="text-[11px] opacity-90">${fromName}</span>`;
+    el.innerHTML = `<span class="text-2xl">${emoji}</span><span class="text-xs font-bold opacity-90">${fromName}</span>`;
     container.appendChild(el);
 
     setTimeout(() => {
-      if (el && el.parentNode) el.parentNode.removeChild(el);
+      el.style.opacity = '0';
+      el.style.transform = `translateX(${offset}px) translateY(-12px)`;
+      setTimeout(() => {
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      }, 300);
     }, 2200);
   },
 
@@ -1157,9 +1171,6 @@ const WerewolfModule = {
 
     return `
       <div class="relative space-y-4 fade-in pb-20" id="room-view-container">
-        <!-- Floating Reactions Container -->
-        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
-
         <!-- Room Header Bar -->
         <div class="flex items-center justify-between pt-1">
           <button onclick="WerewolfModule.leaveRoom()" class="flex items-center space-x-1 text-xs font-bold text-red-500 hover:text-red-600 tap-scale">
@@ -2491,9 +2502,6 @@ const WerewolfModule = {
 
     return `
       <div class="relative space-y-4 fade-in pb-16">
-        <!-- Floating Reactions Container -->
-        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
-
         <!-- Top Header & Confirmed Progress Badge -->
         <div class="flex items-center justify-between pt-1">
           <button onclick="WerewolfModule.leaveRoom()" class="flex items-center space-x-1 text-xs font-bold text-red-500 hover:text-red-600 tap-scale">
@@ -2622,9 +2630,6 @@ const WerewolfModule = {
 
     return `
       <div class="relative space-y-4 fade-in pb-16">
-        <!-- Floating Reactions Container -->
-        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
-
         <!-- Header Bar -->
         <div class="flex items-center justify-between pt-1">
           <div class="flex items-center space-x-2">
@@ -3042,9 +3047,6 @@ const WerewolfModule = {
 
     return `
       <div class="relative space-y-4 fade-in pb-20">
-        <!-- Floating Reactions Container -->
-        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
-
         <!-- Header -->
         <div class="flex items-center justify-between pt-1">
           <button onclick="WerewolfModule.leaveRoom()" class="flex items-center space-x-1 text-xs font-bold text-red-500 hover:text-red-600 tap-scale">
@@ -3297,9 +3299,6 @@ const WerewolfModule = {
 
     return `
       <div class="relative space-y-4 fade-in pb-16">
-        <!-- Floating Reactions Container -->
-        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
-
         <!-- Top Header & Timer -->
         <div class="flex items-center justify-between pt-1">
           <div class="flex items-center space-x-2">
@@ -3428,9 +3427,6 @@ const WerewolfModule = {
 
     return `
       <div class="relative space-y-4 fade-in pb-20">
-        <!-- Floating Reactions Container -->
-        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
-
         <!-- Header -->
         <div class="flex items-center justify-between pt-1">
           <span class="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center space-x-1">

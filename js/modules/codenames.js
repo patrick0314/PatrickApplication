@@ -1095,18 +1095,32 @@ const CodenamesModule = {
   },
 
   showFloatingReaction(emoji, fromName) {
-    const container = document.getElementById('floating-reactions');
-    if (!container) return;
+    let container = document.getElementById('global-floating-reactions');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'global-floating-reactions';
+      container.className = 'pointer-events-none fixed inset-x-0 bottom-0 top-0 max-w-md mx-auto z-50 overflow-hidden';
+      document.body.appendChild(container);
+    }
 
-    const offset = Math.floor(Math.random() * 40) - 20;
+    const existingCount = container.children.length;
+    // Calculate vertical position at screen bottom (just above bottom nav bar)
+    const bottomPx = 80 + ((existingCount % 5) * 44);
+    const offset = Math.floor(Math.random() * 24) - 12;
+
     const el = document.createElement('div');
-    el.className = 'absolute right-6 bottom-24 flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/95 text-white text-xs font-bold shadow-2xl border border-white/20 animate-bounce pointer-events-none z-50 transition-all';
+    el.className = 'absolute right-6 flex items-center space-x-2 px-3.5 py-2 rounded-full bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-bold shadow-2xl border border-white/20 animate-bounce pointer-events-none z-50 transition-all duration-300';
+    el.style.bottom = `${bottomPx}px`;
     el.style.transform = `translateX(${offset}px)`;
-    el.innerHTML = `<span class="text-xl">${emoji}</span><span class="text-[11px] opacity-90">${fromName}</span>`;
+    el.innerHTML = `<span class="text-2xl">${emoji}</span><span class="text-xs font-bold opacity-90">${fromName}</span>`;
     container.appendChild(el);
 
     setTimeout(() => {
-      if (el && el.parentNode) el.parentNode.removeChild(el);
+      el.style.opacity = '0';
+      el.style.transform = `translateX(${offset}px) translateY(-12px)`;
+      setTimeout(() => {
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      }, 300);
     }, 2200);
   },
 
@@ -1419,6 +1433,9 @@ const CodenamesModule = {
           </div>
         </div>
 
+        <!-- Quick Reactions Bar -->
+        ${this.renderReactionsBar()}
+
         <!-- Host Action Container -->
         <div class="pt-2 space-y-2.5">
           ${isHost ? `
@@ -1484,9 +1501,6 @@ const CodenamesModule = {
 
     return `
       <div class="relative space-y-3.5 fade-in pb-16" id="cn-game-container">
-        <!-- Floating Reactions Container -->
-        <div id="floating-reactions" class="pointer-events-none fixed inset-0 z-50"></div>
-
         <!-- Top Header Bar -->
         <div class="flex items-center justify-between pt-1">
           <button onclick="CodenamesModule.leaveGame()" class="flex items-center space-x-1 text-xs font-bold text-red-500 hover:text-red-600 tap-scale">
@@ -1895,7 +1909,7 @@ const CodenamesModule = {
     `;
   },
 
-  renderReactionsAndLogs(gameData) {
+  renderReactionsBar() {
     const now = Date.now();
     const elapsed = now - (this.state.lastReactionTime || 0);
     const isCoolingDown = elapsed < 10000;
@@ -1923,6 +1937,12 @@ const CodenamesModule = {
           <button onclick="CodenamesModule.sendReaction('💀')" class="cn-reaction-btn tap-scale text-2xl ${isCoolingDown ? 'opacity-40 cursor-not-allowed' : 'hover:scale-125'} transition" title="刺客">💀</button>
         </div>
       </div>
+    `;
+  },
+
+  renderReactionsAndLogs(gameData) {
+    return `
+      ${this.renderReactionsBar()}
 
       <!-- Game Logs Accordion -->
       <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-3.5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
