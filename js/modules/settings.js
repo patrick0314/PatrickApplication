@@ -48,9 +48,6 @@ const SettingsModule = {
                 儲存
               </button>
             </div>
-            <p class="text-[11px] text-slate-400 mt-1.5">
-              儲存後，頂部標題將顯示為「暱稱's App」，首頁問候語亦會同步更新。
-            </p>
           </div>
         </div>
 
