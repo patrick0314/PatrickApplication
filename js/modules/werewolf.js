@@ -520,32 +520,62 @@ const WerewolfModule = {
   },
 
   leaveRoom() {
-    if (confirm('確定要退出房間嗎？')) {
-      if (this.state.client && this.state.roomId) {
-        this.broadcast({
-          type: 'PLAYER_LEAVE',
-          playerId: this.state.myPlayerId,
-          playerName: this.state.myPlayerName
-        });
-        this.state.client.unsubscribe(this.getRoomTopic(this.state.roomId));
+    App.confirm({
+      title: '確定要退出房間嗎？',
+      confirmText: '退出',
+      cancelText: '取消',
+      isDestructive: true,
+      onConfirm: () => {
+        if (this.state.client && this.state.roomId) {
+          this.broadcast({
+            type: 'PLAYER_LEAVE',
+            playerId: this.state.myPlayerId,
+            playerName: this.state.myPlayerName
+          });
+          this.state.client.unsubscribe(this.getRoomTopic(this.state.roomId));
+        }
+        if (this._reactionTimer) {
+          clearInterval(this._reactionTimer);
+          this._reactionTimer = null;
+        }
+        this.clearGameTimer();
+        this.state.gamePhase = 'lobby';
+        this.state.gameData = null;
+        this.state.lastReactionTime = 0;
+        this.state.currentView = 'lobby';
+        this.state.roomId = '';
+        this.state.players = [];
+        this.state.messages = [];
+        this.state.isHost = false;
+        this.state.isReady = false;
+        this.renderView();
+        App.showToast('已退出房間', 'info');
       }
-      if (this._reactionTimer) {
-        clearInterval(this._reactionTimer);
-        this._reactionTimer = null;
+    });
+  },
+
+  promptChangeName() {
+    const settings = StorageManager.get('settings', { userName: 'default' });
+    const currentName = settings.userName || 'default';
+    App.prompt({
+      title: '修改玩家暱稱',
+      defaultValue: currentName,
+      placeholder: '請輸入自訂暱稱...',
+      confirmText: '儲存',
+      cancelText: '取消',
+      onConfirm: (newName) => {
+        if (!newName) {
+          App.showToast('名稱不能為空', 'error');
+          return;
+        }
+        settings.userName = newName;
+        StorageManager.set('settings', settings);
+        this.state.myPlayerName = newName;
+        App.updateHeader();
+        this.renderView();
+        App.showToast(`暱稱已更新為：${newName}`, 'success');
       }
-      this.clearGameTimer();
-      this.state.gamePhase = 'lobby';
-      this.state.gameData = null;
-      this.state.lastReactionTime = 0;
-      this.state.currentView = 'lobby';
-      this.state.roomId = '';
-      this.state.players = [];
-      this.state.messages = [];
-      this.state.isHost = false;
-      this.state.isReady = false;
-      this.renderView();
-      App.showToast('已退出房間', 'info');
-    }
+    });
   },
 
   broadcast(msgObj) {
@@ -1056,7 +1086,7 @@ const WerewolfModule = {
               <p class="text-[10px] text-slate-400">目前連線玩家身分</p>
             </div>
           </div>
-          <button onclick="App.switchTab('settings')" class="text-xs text-indigo-600 dark:text-indigo-400 font-semibold px-2.5 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40">
+          <button onclick="WerewolfModule.promptChangeName()" class="text-xs text-indigo-600 dark:text-indigo-400 font-semibold px-2.5 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 tap-scale">
             更換暱稱
           </button>
         </div>

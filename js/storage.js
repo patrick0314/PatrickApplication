@@ -5,9 +5,34 @@
 const StorageManager = {
   PREFIX: 'myapp:',
 
+  // Cookie helpers to ensure settings persist even across mobile PWA background task purges
+  getCookie(name) {
+    try {
+      const match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
+      return match ? decodeURIComponent(match[3]) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  setCookie(name, value, days = 3650) {
+    try {
+      const expires = new Date(Date.now() + days * 864e5).toUTCString();
+      document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+    } catch (e) {}
+  },
+
   get(key, defaultValue = null) {
     try {
-      const data = localStorage.getItem(this.PREFIX + key);
+      let data = localStorage.getItem(this.PREFIX + key);
+      // Fallback to cookie if localStorage had a glitch or was purged on mobile
+      if (data === null && key === 'settings') {
+        const cookieData = this.getCookie('myapp_settings');
+        if (cookieData) {
+          data = cookieData;
+          try { localStorage.setItem(this.PREFIX + key, data); } catch (e) {}
+        }
+      }
       return data !== null ? JSON.parse(data) : defaultValue;
     } catch (e) {
       console.error(`[StorageManager] Failed to read ${key}:`, e);
@@ -17,7 +42,11 @@ const StorageManager = {
 
   set(key, value) {
     try {
-      localStorage.setItem(this.PREFIX + key, JSON.stringify(value));
+      const str = JSON.stringify(value);
+      localStorage.setItem(this.PREFIX + key, str);
+      if (key === 'settings') {
+        this.setCookie('myapp_settings', str);
+      }
       window.dispatchEvent(new CustomEvent('myapp:storage-updated', { detail: { key, value } }));
       return true;
     } catch (e) {
@@ -28,10 +57,18 @@ const StorageManager = {
 
   remove(key) {
     localStorage.removeItem(this.PREFIX + key);
+    if (key === 'settings') {
+      this.setCookie('myapp_settings', '', -1);
+    }
     window.dispatchEvent(new CustomEvent('myapp:storage-updated', { detail: { key, value: null } }));
   },
 
   init() {
+    // Request persistent storage if supported (prevents Android OS from evicting PWA data)
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().catch(() => {});
+    }
+
     let settings = this.get('settings');
     if (!settings) {
       settings = {
@@ -40,9 +77,20 @@ const StorageManager = {
         createdAt: new Date().toISOString()
       };
       this.set('settings', settings);
-    } else if (!settings.userName || settings.userName === 'Default Name' || settings.userName === 'Patrick') {
-      settings.userName = 'default';
-      this.set('settings', settings);
+    } else {
+      // Ensure required properties exist without overwriting user's chosen userName
+      let modified = false;
+      if (!settings.userName) {
+        settings.userName = 'default';
+        modified = true;
+      }
+      if (!settings.theme) {
+        settings.theme = 'system';
+        modified = true;
+      }
+      if (modified) {
+        this.set('settings', settings);
+      }
     }
 
     if (!this.get('installed_modules')) {
@@ -60,6 +108,7 @@ const StorageManager = {
       }
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
+    this.setCookie('myapp_settings', '', -1);
     this.init();
     window.dispatchEvent(new CustomEvent('myapp:data-cleared'));
   }

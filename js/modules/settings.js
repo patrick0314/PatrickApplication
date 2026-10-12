@@ -36,11 +36,13 @@ const SettingsModule = {
                 id="nickname-input" 
                 value="${currentName}" 
                 placeholder="輸入您的自訂名稱..."
-                onkeydown="if(event.key==='Enter') SettingsModule.saveUserName()"
+                oninput="SettingsModule.saveUserName(true)"
+                onblur="SettingsModule.saveUserName(true)"
+                onkeydown="if(event.key==='Enter') { SettingsModule.saveUserName(false); this.blur(); }"
                 class="flex-1 px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
               />
               <button 
-                onclick="SettingsModule.saveUserName()" 
+                onclick="SettingsModule.saveUserName(false)" 
                 class="tap-scale px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/25 shrink-0"
               >
                 儲存
@@ -140,19 +142,19 @@ const SettingsModule = {
     `;
   },
 
-  saveUserName() {
+  saveUserName(silent = false) {
     const input = document.getElementById('nickname-input');
     if (!input) return;
     const newName = input.value.trim();
     if (!newName) {
-      App.showToast('名稱不能為空', 'error');
+      if (!silent) App.showToast('名稱不能為空', 'error');
       return;
     }
     const settings = StorageManager.get('settings', {});
     settings.userName = newName;
     StorageManager.set('settings', settings);
     App.updateHeader();
-    App.showToast('名稱已更新！', 'success');
+    if (!silent) App.showToast('名稱已更新！', 'success');
   },
 
   setTheme(theme) {
@@ -165,11 +167,18 @@ const SettingsModule = {
   },
 
   confirmReset() {
-    if (confirm('確定要重置嗎？\n\n這將會刪除本機相關所有檔案與自訂設定，回到最原始的狀態！')) {
-      StorageManager.clearAll();
-      App.showToast('已重置為原始狀態', 'info');
-      setTimeout(() => location.reload(), 400);
-    }
+    App.confirm({
+      title: '確定要重置嗎？',
+      message: '這將會刪除本機相關所有檔案與自訂設定，回到最原始的狀態！',
+      confirmText: '確定重置',
+      cancelText: '取消',
+      isDestructive: true,
+      onConfirm: () => {
+        StorageManager.clearAll();
+        App.showToast('已重置為原始狀態', 'info');
+        setTimeout(() => location.reload(), 400);
+      }
+    });
   }
 };
 
