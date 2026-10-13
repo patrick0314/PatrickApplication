@@ -31,6 +31,13 @@ const App = {
       init: () => CodenamesModule.init()
     },
     {
+      id: 'arthur',
+      name: '亞瑟傳奇',
+      icon: 'shield',
+      render: () => ArthurModule.render(),
+      init: () => ArthurModule.init()
+    },
+    {
       id: 'settings',
       name: '設定',
       icon: 'settings',

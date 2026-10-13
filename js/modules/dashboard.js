@@ -32,6 +32,17 @@ const DashboardModule = {
       shadow: 'shadow-blue-950/30',
       badgeClass: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/30',
       action: () => App.switchTab('codenames')
+    },
+    {
+      id: 'arthur',
+      name: '亞瑟傳奇',
+      category: '多人連線',
+      emoji: '👑',
+      desc: '阿瓦隆聖杯任務 · 支援 5~10 人',
+      gradient: 'from-amber-950 via-slate-900 to-indigo-950',
+      shadow: 'shadow-amber-950/30',
+      badgeClass: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/30',
+      action: () => App.switchTab('arthur')
     }
   ],
 
