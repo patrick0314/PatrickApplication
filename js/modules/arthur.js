@@ -555,7 +555,7 @@ const ArthurModule = {
   },
 
   joinRoom(inputRoomId) {
-    const code = (inputRoomId || document.getElementById('art-join-code-input')?.value || '').trim();
+    const code = (inputRoomId || document.getElementById('art-join-room-input')?.value || document.getElementById('art-join-code-input')?.value || '').trim();
     if (!code || code.length !== 4) {
       App.showToast('請輸入 4 位數房間代號', 'warning');
       return;
@@ -619,6 +619,30 @@ const ArthurModule = {
       App.showToast(`房間代號 #${this.state.roomId} 已複製！`, 'success');
     }).catch(() => {
       App.showToast(`房間代號為: ${this.state.roomId}`, 'info');
+    });
+  },
+
+  promptChangeName() {
+    const settings = StorageManager.get('settings', { userName: 'default' });
+    const currentName = settings.userName || 'default';
+    App.prompt({
+      title: '修改騎士暱稱',
+      defaultValue: currentName,
+      placeholder: '請輸入暱稱...',
+      confirmText: '儲存',
+      cancelText: '取消',
+      onConfirm: (newName) => {
+        if (!newName) {
+          App.showToast('名稱不能為空', 'error');
+          return;
+        }
+        settings.userName = newName;
+        StorageManager.set('settings', settings);
+        this.state.myPlayerName = newName;
+        App.updateHeader();
+        this.renderView();
+        App.showToast(`騎士暱稱已更新為：${newName}`, 'success');
+      }
     });
   },
 
@@ -1292,7 +1316,7 @@ const ArthurModule = {
     }
   },
 
-  // View 1: Lobby View
+  // View 1: Lobby Screen
   renderLobbyView() {
     const settings = StorageManager.get('settings', { userName: 'default' });
     const currentName = settings.userName || 'default';
@@ -1301,106 +1325,95 @@ const ArthurModule = {
       <div class="space-y-5 fade-in pb-16">
         <!-- Back Navigation & Module Header -->
         <div class="flex items-center justify-between pt-1">
-          <button onclick="App.switchTab('dashboard')" class="flex items-center space-x-1.5 text-xs font-bold text-slate-500 hover:text-indigo-600 tap-scale">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-            <span>返回首頁</span>
+          <button onclick="App.switchTab('dashboard')" class="flex items-center space-x-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 tap-scale">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            <span>返回功能列表</span>
           </button>
-          <span class="text-xs font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-full border border-indigo-200/50 dark:border-indigo-900/40">
-            亞瑟傳奇 · 阿瓦隆
-          </span>
         </div>
 
-        <!-- Hero Card -->
-        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950 via-slate-900 to-indigo-950 p-6 text-white shadow-xl shadow-amber-950/20">
-          <div class="relative z-10 space-y-2">
-            <div class="flex items-center space-x-2">
-              <span class="text-2xl">👑</span>
-              <span class="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-600/40">
-                圓桌騎士 聖杯征戰
-              </span>
+        <!-- Arthur Hero Banner -->
+        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950 via-slate-900 to-indigo-950 p-6 text-white shadow-xl shadow-amber-950/40 border border-amber-800/40">
+          <div class="relative z-10">
+            <div class="flex items-center space-x-2 text-amber-300 text-xs font-bold uppercase tracking-wider mb-2">
+              <span class="text-xl">👑</span>
+              <span>The Resistance: Avalon · 亞瑟傳奇</span>
             </div>
-            <h2 class="text-2xl font-black tracking-tight text-white">亞瑟傳奇 (阿瓦隆)</h2>
-            <p class="text-xs text-slate-300 leading-relaxed">
-              正義方與莫德雷德爪牙的巔峰陣營對決！透過 5 輪聖杯任務、嚴格公開表決、湖中女神神聖查驗與終局刺殺，揪出偽裝者！
-            </p>
+
+            <h1 class="text-2xl font-black tracking-tight text-white">亞瑟傳奇</h1>
           </div>
-          <div class="absolute -right-8 -bottom-8 w-40 h-40 bg-amber-600/10 rounded-full blur-2xl pointer-events-none"></div>
+
+          <div class="absolute -right-10 -bottom-10 h-36 w-36 rounded-full bg-amber-600/20 blur-2xl"></div>
         </div>
 
-        <!-- Nickname Setting Card -->
-        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4.5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center space-x-1.5">
-              <i data-lucide="user" class="w-4 h-4 text-indigo-500"></i>
-              <span>騎士暱稱設定</span>
-            </span>
-            <button onclick="App.switchTab('settings')" class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 tap-scale flex items-center space-x-1">
-              <span>修改暱稱</span>
-              <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
-            </button>
+        <!-- Player Nickname Badge -->
+        <div class="rounded-2xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="h-10 w-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm">
+              ${(currentName || 'D').charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p class="text-xs font-bold text-slate-900 dark:text-white">${currentName}</p>
+              <p class="text-[10px] text-slate-400">目前連線玩家身分</p>
+            </div>
           </div>
-          <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
-            <span class="text-sm font-black text-slate-800 dark:text-slate-200">${currentName}</span>
-            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">連線就緒</span>
-          </div>
+          <button onclick="ArthurModule.promptChangeName()" class="text-xs text-indigo-600 dark:text-indigo-400 font-semibold px-2.5 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 tap-scale">
+            更換暱稱
+          </button>
         </div>
 
-        <!-- Room Actions Grid -->
+        <!-- Room Action Cards -->
         <div class="grid grid-cols-1 gap-3.5">
           <!-- Create Room -->
-          <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
-            <div class="flex items-center space-x-3">
-              <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-600 to-amber-400 text-white flex items-center justify-center font-black text-lg shadow-md shadow-amber-500/20">
+          <button onclick="ArthurModule.createRoom()" class="tap-scale flex items-center justify-between p-5 rounded-3xl bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/25 text-left">
+            <div class="flex items-center space-x-4">
+              <div class="h-12 w-12 rounded-2xl bg-white/15 flex items-center justify-center text-white text-2xl shadow-inner">
                 👑
               </div>
               <div>
-                <h3 class="text-sm font-black text-slate-900 dark:text-white">我是房主</h3>
-                <p class="text-[11px] text-slate-500 dark:text-slate-400">建立全新圓桌房間，自訂派西維爾與湖中女神設定</p>
+                <h3 class="text-base font-black">創建新房間</h3>
+                <p class="text-xs text-indigo-200 mt-0.5">擔任房主，產生專屬房間代碼給好友</p>
               </div>
             </div>
-            <button onclick="ArthurModule.createRoom()" class="tap-scale w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600 text-white font-black text-xs shadow-md shadow-amber-600/20 flex items-center justify-center space-x-2">
-              <i data-lucide="plus-circle" class="w-4 h-4"></i>
-              <span>創立亞瑟傳奇新房間</span>
-            </button>
-          </div>
+            <i data-lucide="arrow-right" class="w-5 h-5 opacity-80"></i>
+          </button>
 
           <!-- Join Room -->
           <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
-            <div class="flex items-center space-x-3">
-              <div class="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center font-black text-lg">
-                🚪
-              </div>
-              <div>
-                <h3 class="text-sm font-black text-slate-900 dark:text-white">加入好友房間</h3>
-                <p class="text-[11px] text-slate-500 dark:text-slate-400">輸入 4 位數房間號碼快速連線入局</p>
-              </div>
-            </div>
             <div class="flex items-center space-x-2">
+              <i data-lucide="door-open" class="w-4 h-4 text-indigo-500"></i>
+              <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200">加入已有房間</h3>
+            </div>
+            
+            <div class="flex space-x-2">
               <input 
                 type="text" 
-                id="art-join-code-input" 
-                maxlength="4" 
-                placeholder="4 位數號碼" 
-                class="flex-1 px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-center text-sm font-black tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                id="art-join-room-input" 
+                maxlength="6"
+                placeholder="請輸入 4 位數房間代號 (如 8F2A)"
+                value="${this.state.roomId || ''}"
+                class="flex-1 uppercase tracking-widest font-black px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-center"
               />
-              <button onclick="ArthurModule.joinRoom()" class="tap-scale px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20">
-                加入房間
+              <button 
+                onclick="ArthurModule.joinRoom(document.getElementById('art-join-room-input').value)" 
+                class="tap-scale px-6 py-3 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-xs shadow-md shrink-0"
+              >
+                加入
               </button>
             </div>
           </div>
         </div>
 
-        <!-- Quick Rules Card -->
+        <!-- Arthur Quick Rules Card -->
         <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
-          <div class="flex items-center space-x-2 pb-1 border-b border-slate-100 dark:border-slate-800">
-            <i data-lucide="book-open" class="w-4 h-4 text-amber-500"></i>
-            <h3 class="text-xs font-bold text-slate-900 dark:text-white">亞瑟傳奇 (阿瓦隆) 規則速覽說明卡</h3>
+          <div class="flex items-center space-x-2">
+            <i data-lucide="book-open" class="w-4 h-4 text-indigo-500"></i>
+            <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200">遊戲規則速覽</h3>
           </div>
-          <div class="space-y-2 text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-            <p><strong>🔵 好人獲勝條件：</strong>成功完成 3 次聖杯任務，且最後梅林未被刺客刺殺。</p>
-            <p><strong>🔴 壞人獲勝條件：</strong>造成 3 次任務失敗、連續 5 次組隊流局、或成功刺殺梅林。</p>
-            <p><strong>🌊 湖中女神使用時機：</strong>於<strong>第 2、3、4 輪任務完成結算後</strong>由持有者秘密查驗一名玩家真實陣營，隨後將女神移交給該受驗者。</p>
-            <p><strong>⚠️ 第 4 輪任務特別規則：</strong>在 7 人以上遊戲中，第 4 輪任務必須出現 <strong>2 張或以上失敗卡</strong> 才會宣告失敗。</p>
+          <div class="space-y-2 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+            <p>• <b>陣營勝負</b>：<span class="font-bold text-blue-600 dark:text-blue-400">🔵 正義方</span> 需完成 3 次聖杯任務且梅林未被刺殺；<span class="font-bold text-rose-600 dark:text-rose-400">🔴 邪惡方</span> 需造成 3 次任務失敗、連續 5 次組隊流局，或刺客成功刺殺梅林。</p>
+            <p>• <b>組隊表決</b>：隊長依輪次需求人數指派隊員，全體公開表決（贊成/反對），贊成過半方可出征；若被否決則由下一位隊長重選，連續否決 5 次邪惡方直接獲勝。</p>
+            <p>• <b>執行任務</b>：出征隊員秘密出牌（好人只能投成功，壞人可投成功或失敗），洗牌後揭曉；出現 1 張失敗卡即任務失敗（7人以上第 4 輪需 2 張失敗卡）。</p>
+            <p>• <b>湖中女神</b>：於<b>第 2、3、4 輪任務完成後</b>發動，持有者秘密查驗一名未曾受驗玩家的真實陣營，隨後將女神移交給該受驗者。</p>
           </div>
         </div>
       </div>
