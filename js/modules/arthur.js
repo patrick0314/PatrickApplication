@@ -1463,36 +1463,20 @@ const ArthurModule = {
           </div>
         </div>
 
-        <!-- Room Status & Balance Indicator -->
+        <!-- Player Roster (Accurate dynamic count in title) -->
         <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
           <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <span class="text-xl">🏰</span>
-              <div>
-                <h3 class="text-xs font-black text-slate-900 dark:text-white">圓桌大廳騎士集結 (${count}/10 人)</h3>
-                <p class="text-[10px] text-slate-400">遊戲需 5 ~ 10 人即可開局</p>
-              </div>
-            </div>
-            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${canStart ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
-              ${canStart ? `配比：${cfg.good}好 / ${cfg.evil}壞` : '人數未達標 (需 5~10 人)'}
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center space-x-1.5">
+              <i data-lucide="users" class="w-4 h-4 text-indigo-500"></i>
+              <span>房間玩家列表 (<span id="art-room-player-count">${count}</span>)</span>
+            </h2>
+            <span id="art-room-status-summary" class="text-[10px] font-bold ${canStart ? 'text-emerald-500' : 'text-slate-400'}">
+              ${canStart ? `配比：${cfg.good}好 / ${cfg.evil}壞` : '等待玩家加入 (需 5~10 人)'}
             </span>
           </div>
 
-          <!-- Roster Grid -->
-          <div class="grid grid-cols-2 gap-2">
-            ${this.state.players.map((p, idx) => `
-              <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800">
-                <div class="flex items-center space-x-2 truncate">
-                  <span class="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">
-                    ${idx + 1}
-                  </span>
-                  <span class="text-xs font-bold text-slate-800 dark:text-white truncate">
-                    ${p.name} ${p.id === this.state.myPlayerId ? '<strong class="text-indigo-500">(我)</strong>' : ''}
-                  </span>
-                </div>
-                ${p.isHost ? '<span class="text-[10px] text-amber-500 font-bold shrink-0">👑 房主</span>' : ''}
-              </div>
-            `).join('')}
+          <div class="space-y-2" id="art-players-list-container">
+            ${this.renderPlayerCards()}
           </div>
         </div>
 
@@ -1634,6 +1618,56 @@ const ArthurModule = {
         </div>
       </div>
     `;
+  },
+
+  renderPlayerCards() {
+    if (!this.state.players || this.state.players.length === 0) {
+      return `<div class="text-xs text-slate-400 py-4 text-center">正在等待玩家加入...</div>`;
+    }
+
+    return this.state.players.map((p, idx) => {
+      const isMe = p.id === this.state.myPlayerId;
+
+      return `
+        <div class="flex items-center justify-between p-3 rounded-2xl ${
+          p.isReady 
+            ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/40' 
+            : 'bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800'
+        } transition-all">
+          <div class="flex items-center space-x-3">
+            <div class="h-9 w-9 rounded-xl ${p.isHost ? 'bg-amber-500' : 'bg-indigo-600'} text-white flex items-center justify-center font-bold text-xs shadow-sm">
+              ${p.isHost ? '👑' : (p.name || 'P').charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div class="flex items-center space-x-1.5">
+                <span class="text-xs font-bold text-slate-900 dark:text-white">${p.name}</span>
+                ${isMe ? '<span class="text-[9px] bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.2 rounded font-bold">你</span>' : ''}
+                ${p.isHost ? '<span class="text-[9px] bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 px-1.5 py-0.2 rounded font-bold">房主</span>' : ''}
+              </div>
+              <div class="flex items-center space-x-1.5 text-[10px] text-slate-400">
+                <span class="font-medium text-amber-600/80 dark:text-amber-400/80">圓桌席位 #${idx + 1}</span>
+                <span>·</span>
+                <span>連線在線</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ready Status Tag -->
+          <div>
+            ${p.isReady ? `
+              <span class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-black shadow-sm shadow-emerald-500/20">
+                <i data-lucide="check" class="w-3 h-3 stroke-[3]"></i>
+                <span>已就緒</span>
+              </span>
+            ` : `
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] font-semibold">
+                等待準備
+              </span>
+            `}
+          </div>
+        </div>
+      `;
+    }).join('');
   },
 
   // View 3: Game Screen
