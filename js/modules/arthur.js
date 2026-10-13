@@ -251,7 +251,7 @@ const ArthurModule = {
     if (data.type === 'PING') {
       if (data.from === this.state.myPlayerId && this.state.pingStart) {
         this.state.ping = Date.now() - this.state.pingStart;
-        const pingEl = document.getElementById('art-ping-val');
+        const pingEl = document.getElementById('art-ping-val') || document.getElementById('art-room-ping-val');
         if (pingEl) pingEl.textContent = `${this.state.ping}ms`;
       }
       return;
@@ -1437,14 +1437,30 @@ const ArthurModule = {
             <span>退出房間</span>
           </button>
 
-          <div class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-900/40 text-[11px] font-bold text-amber-700 dark:text-amber-300">
-            <span>房間 #${this.state.roomId}</span>
+          <!-- Ping & Status -->
+          <div class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-900/40 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+            <span id="art-room-ping-val">${this.state.ping ? this.state.ping + 'ms' : '連線正常'}</span>
+          </div>
+        </div>
+
+        <!-- Room Identity Banner -->
+        <div class="rounded-3xl bg-gradient-to-r from-slate-900 via-amber-950 to-slate-900 p-5 text-white border border-amber-900/60 shadow-xl flex items-center justify-between">
+          <div>
+            <p class="text-[10px] uppercase font-bold text-amber-300 tracking-wider">房間代碼 (點擊可複製)</p>
+            <div class="flex items-center space-x-2 mt-0.5">
+              <span class="text-3xl font-black tracking-widest text-amber-400 cursor-pointer" onclick="ArthurModule.copyRoomCode()">#${this.state.roomId}</span>
+              <button onclick="ArthurModule.copyRoomCode()" class="tap-scale p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-amber-200" title="複製房間代碼">
+                <i data-lucide="copy" class="w-4 h-4"></i>
+              </button>
+            </div>
           </div>
 
-          <button onclick="ArthurModule.copyRoomCode()" class="flex items-center space-x-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 tap-scale">
-            <i data-lucide="copy" class="w-4 h-4"></i>
-            <span>複製房號</span>
-          </button>
+          <div class="text-right">
+            <span class="text-xs font-bold text-amber-200 bg-white/10 px-3 py-1.5 rounded-full inline-block">
+              ${isHost ? '👑 您是房主' : '👤 房間成員'}
+            </span>
+          </div>
         </div>
 
         <!-- Room Status & Balance Indicator -->
