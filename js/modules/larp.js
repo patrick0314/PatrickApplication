@@ -1771,24 +1771,38 @@ const LarpModule = {
       createdAt: new Date().toISOString()
     };
 
-    App.showToast('正在發布並同步心得至雲端...', 'info');
-
     try {
-      await this.supabaseRequest('/reviews', {
-        method: 'POST',
-        body: JSON.stringify(this.mapReviewToRow(newReview, scriptId))
+      this.closeAddReviewModal();
+      await App.showProgressBar({
+        title: '正在發布遊玩心得...',
+        subtitle: `正在將您在《${script.title}》的心得與照片同步至雲端`,
+        durationMs: 5000,
+        task: async () => {
+          await this.supabaseRequest('/reviews', {
+            method: 'POST',
+            body: JSON.stringify(this.mapReviewToRow(newReview, scriptId))
+          });
+        }
       });
 
       if (!script.reviews) script.reviews = [];
       script.reviews.unshift(newReview);
       this.saveScripts();
       this.state.syncStatus = 'synced';
-      this.closeAddReviewModal();
       this.renderView();
       App.showToast('🎉 心得已成功同步至雲端！', 'success');
       if ('vibrate' in navigator) navigator.vibrate(30);
     } catch (err) {
       console.error('[LARP Sync] Failed to sync review to Supabase:', err);
+      this._reviewDraft = {
+        name,
+        date,
+        character,
+        content,
+        isSpoiler,
+        rating
+      };
+      this.openAddReviewModal();
       App.showToast('發布失敗：' + (err.message || '雲端連線異常，請稍後再試'), 'error');
     }
   },
@@ -1861,26 +1875,29 @@ const LarpModule = {
       reviews: []
     };
 
-    App.showToast('正在建立並同步劇本至雲端...', 'info');
     try {
-      await this.supabaseRequest('/scripts', {
-        method: 'POST',
-        body: JSON.stringify(this.mapScriptToRow(newScript))
+      await App.showProgressBar({
+        title: '正在建立劇本...',
+        subtitle: `正在將劇本《${title}》上傳並同步至雲端資料庫`,
+        durationMs: 5000,
+        task: async () => {
+          await this.supabaseRequest('/scripts', {
+            method: 'POST',
+            body: JSON.stringify(this.mapScriptToRow(newScript))
+          });
+        }
       });
+
       this.state.scripts.unshift(newScript);
       this.saveScripts();
       this.state.tempScriptCover = null;
       this.state.syncStatus = 'synced';
       this.switchView('detail', newScript.id);
       App.showToast(`✅ 已成功建立劇本《${title}》！`, 'success');
+      if ('vibrate' in navigator) navigator.vibrate(30);
     } catch (err) {
       console.warn('[LARP Sync] Failed to sync new script to Supabase:', err);
-      // Fallback local save
-      this.state.scripts.unshift(newScript);
-      this.saveScripts();
-      this.state.tempScriptCover = null;
-      this.switchView('detail', newScript.id);
-      App.showToast(`已建立劇本《${title}》（雲端連線失敗，先儲存於本機）`, 'warning');
+      App.showToast(`建立失敗：${err.message || '雲端連線異常，請稍後再試'}`, 'error');
     }
   },
 
@@ -1903,11 +1920,18 @@ const LarpModule = {
       cancelText: '取消',
       isDestructive: true,
       onConfirm: async () => {
-        App.showToast('正在從雲端移除心得...', 'info');
         try {
-          await this.supabaseRequest(`/reviews?id=eq.${encodeURIComponent(reviewId)}`, {
-            method: 'DELETE'
+          await App.showProgressBar({
+            title: '正在移除心得紀錄...',
+            subtitle: `正在從雲端資料庫永久移除「${reviewerName}」的評價`,
+            durationMs: 5000,
+            task: async () => {
+              await this.supabaseRequest(`/reviews?id=eq.${encodeURIComponent(reviewId)}`, {
+                method: 'DELETE'
+              });
+            }
           });
+
           script.reviews = script.reviews.filter(r => r.id !== reviewId);
           this.saveScripts();
           this.renderView();
@@ -1915,7 +1939,7 @@ const LarpModule = {
           if ('vibrate' in navigator) navigator.vibrate(30);
         } catch (err) {
           console.error('[LARP Delete] Error deleting review:', err);
-          App.showToast('移除失敗：' + (err.message || '雲端連線異常'), 'error');
+          App.showToast('移除失敗：' + (err.message || '雲端連線異常，請稍後再試'), 'error');
         }
       }
     });
@@ -1937,11 +1961,18 @@ const LarpModule = {
       cancelText: '取消',
       isDestructive: true,
       onConfirm: async () => {
-        App.showToast('正在從雲端刪除劇本...', 'info');
         try {
-          await this.supabaseRequest(`/scripts?id=eq.${encodeURIComponent(scriptId)}`, {
-            method: 'DELETE'
+          await App.showProgressBar({
+            title: '正在刪除劇本...',
+            subtitle: `正在從雲端資料庫永久刪除《${script.title}》及所有評價`,
+            durationMs: 5000,
+            task: async () => {
+              await this.supabaseRequest(`/scripts?id=eq.${encodeURIComponent(scriptId)}`, {
+                method: 'DELETE'
+              });
+            }
           });
+
           this.state.scripts = this.state.scripts.filter(s => s.id !== scriptId);
           this.saveScripts();
           this.switchView('list');
@@ -1949,7 +1980,7 @@ const LarpModule = {
           if ('vibrate' in navigator) navigator.vibrate(30);
         } catch (err) {
           console.error('[LARP Delete] Error deleting script:', err);
-          App.showToast('刪除失敗：' + (err.message || '雲端連線異常'), 'error');
+          App.showToast('刪除失敗：' + (err.message || '雲端連線異常，請稍後再試'), 'error');
         }
       }
     });
@@ -1978,23 +2009,30 @@ const LarpModule = {
       confirmText: '確定還原',
       cancelText: '取消',
       onConfirm: async () => {
-        this.state.scripts = this.getDefaultScripts();
-        this.saveScripts();
-        this.state.selectedScriptId = null;
-        this.state.currentView = 'list';
-        this.renderView();
-        App.showToast('已還原為預設示範劇本資料', 'success');
+        try {
+          await App.showProgressBar({
+            title: '正在還原預設劇本...',
+            subtitle: '正在同步經典劇本與示範評價至資料庫',
+            durationMs: 5000,
+            task: async () => {
+              if (this.isAdmin()) {
+                await this.supabaseRequest('/scripts?id=neq.placeholder', {
+                  method: 'DELETE'
+                });
+                await this.seedSupabaseDefaults();
+              }
+            }
+          });
 
-        if (this.isAdmin()) {
-          try {
-            await this.supabaseRequest('/scripts?id=neq.placeholder', {
-              method: 'DELETE'
-            });
-            await this.seedSupabaseDefaults();
-            App.showToast('雲端資料庫已同步還原', 'info');
-          } catch (e) {
-            console.warn('[Supabase] Reset remote error:', e);
-          }
+          this.state.scripts = this.getDefaultScripts();
+          this.saveScripts();
+          this.state.selectedScriptId = null;
+          this.state.currentView = 'list';
+          this.renderView();
+          App.showToast('✅ 已成功還原為預設示範劇本資料！', 'success');
+        } catch (e) {
+          console.warn('[Supabase] Reset remote error:', e);
+          App.showToast('還原失敗：' + (e.message || '雲端連線異常'), 'error');
         }
       }
     });

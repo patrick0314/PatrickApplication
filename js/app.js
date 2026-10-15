@@ -371,6 +371,128 @@ const App = {
         }
       };
     });
+  },
+
+  showProgressBar(options = {}) {
+    return new Promise((resolve, reject) => {
+      const {
+        title = '正在同步資料...',
+        subtitle = '資料正安全傳輸至雲端資料庫，請稍候',
+        durationMs = 5000,
+        task = null
+      } = options;
+
+      const existing = document.getElementById('global-progress-modal');
+      if (existing) existing.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'global-progress-modal';
+      modal.className = 'fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md fade-in';
+      modal.innerHTML = `
+        <div class="w-full max-w-xs rounded-3xl bg-white dark:bg-slate-800 p-6 shadow-2xl border border-slate-100 dark:border-slate-700 text-center space-y-4">
+          <!-- Animated Spinner / Cloud Icon -->
+          <div class="relative w-14 h-14 mx-auto flex items-center justify-center">
+            <div class="absolute inset-0 rounded-full border-4 border-indigo-100 dark:border-indigo-950/60 animate-ping opacity-25"></div>
+            <div class="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center justify-center shadow-inner">
+              <i data-lucide="cloud" class="w-7 h-7 text-indigo-600 dark:text-indigo-400 animate-pulse"></i>
+            </div>
+          </div>
+
+          <!-- Titles -->
+          <div class="space-y-1">
+            <h3 class="text-sm font-black text-slate-900 dark:text-white leading-tight">${title}</h3>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">${subtitle}</p>
+          </div>
+
+          <!-- Progress Bar & Percentage -->
+          <div class="space-y-1.5 pt-1">
+            <div class="w-full bg-slate-100 dark:bg-slate-700/80 rounded-full h-3 overflow-hidden p-0.5 border border-slate-200/50 dark:border-slate-600/50 shadow-inner">
+              <div 
+                id="global-progress-bar-fill" 
+                class="bg-gradient-to-r from-indigo-500 via-teal-500 to-emerald-500 h-full rounded-full transition-all ease-linear"
+                style="width: 0%;"
+              ></div>
+            </div>
+            <div class="flex items-center justify-between text-[10px] font-bold text-slate-400 px-0.5">
+              <span id="global-progress-status-text">同步處理中...</span>
+              <span id="global-progress-pct" class="text-indigo-600 dark:text-indigo-400 font-extrabold">0%</span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+      if (window.lucide) lucide.createIcons();
+
+      const fill = modal.querySelector('#global-progress-bar-fill');
+      const pctEl = modal.querySelector('#global-progress-pct');
+      const statusEl = modal.querySelector('#global-progress-status-text');
+
+      const startTime = Date.now();
+      let animFrame;
+      let isTaskFinished = false;
+      let taskError = null;
+      let taskResult = null;
+
+      if (typeof task === 'function') {
+        task().then(res => {
+          taskResult = res;
+          isTaskFinished = true;
+        }).catch(err => {
+          taskError = err;
+          isTaskFinished = true;
+        });
+      } else {
+        isTaskFinished = true;
+      }
+
+      const updateProgress = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(1, elapsed / durationMs);
+
+        if (taskError) {
+          modal.remove();
+          reject(taskError);
+          return;
+        }
+
+        const pct = Math.floor(progress * 100);
+        if (fill) fill.style.width = `${pct}%`;
+        if (pctEl) pctEl.textContent = `${pct}%`;
+
+        const remainingSec = Math.max(1, Math.ceil((durationMs - elapsed) / 1000));
+        if (statusEl) {
+          if (progress >= 1) {
+            statusEl.textContent = '完成！';
+          } else {
+            statusEl.textContent = `剩餘約 ${remainingSec} 秒...`;
+          }
+        }
+
+        if (progress < 1) {
+          animFrame = requestAnimationFrame(updateProgress);
+        } else {
+          const finishCheck = () => {
+            if (taskError) {
+              modal.remove();
+              reject(taskError);
+            } else if (isTaskFinished) {
+              modal.classList.add('opacity-0');
+              setTimeout(() => {
+                if (modal.parentNode) modal.parentNode.removeChild(modal);
+                resolve(taskResult);
+              }, 150);
+            } else {
+              if (statusEl) statusEl.textContent = '最後確認中...';
+              setTimeout(finishCheck, 100);
+            }
+          };
+          finishCheck();
+        }
+      };
+
+      animFrame = requestAnimationFrame(updateProgress);
+    });
   }
 };
 
