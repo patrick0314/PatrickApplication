@@ -33,7 +33,7 @@ const LarpModule = {
 
     const input = await App.prompt({
       title: '🔒 管理員權限驗證',
-      placeholder: '請輸入管理密碼 (預設: 1314)',
+      placeholder: '請輸入管理員解鎖金鑰',
       confirmText: '解鎖驗證',
       cancelText: '取消'
     });
@@ -55,15 +55,29 @@ const LarpModule = {
   toggleAdminLock() {
     if (this.isAdmin()) {
       App.confirm({
-        title: '確定要鎖定管理權限嗎？',
-        message: '鎖定後將隱藏移除心得按鈕，且需重新驗證才能新增劇本。',
+        title: '👑 管理員權限設定',
+        message: '您可以選擇鎖定權限切換回訪客模式，或自訂變更管理密碼。',
         confirmText: '鎖定權限',
-        cancelText: '保持解鎖',
+        cancelText: '修改密碼',
         isDestructive: false,
         onConfirm: () => {
           this.setAdminStatus(false);
           this.renderView();
           App.showToast('已鎖定管理權限', 'info');
+        },
+        onCancel: async () => {
+          const newPass = await App.prompt({
+            title: '🔑 設定新的管理密碼',
+            placeholder: '請輸入至少 4 碼新密碼',
+            confirmText: '儲存密碼',
+            cancelText: '取消'
+          });
+          if (newPass && newPass.trim().length >= 4) {
+            StorageManager.set(this.ADMIN_PASS_KEY, newPass.trim());
+            App.showToast('✅ 管理密碼已成功更新！', 'success');
+          } else if (newPass) {
+            App.showToast('密碼長度至少需 4 碼', 'warning');
+          }
         }
       });
     } else {
