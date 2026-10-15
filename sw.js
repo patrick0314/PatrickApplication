@@ -1,4 +1,4 @@
-const CACHE_NAME = 'my-app-v39';
+const CACHE_NAME = 'my-app-v40';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -56,6 +56,9 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  // Do not intercept or cache Supabase cloud API requests
+  if (event.request.url.includes('supabase.co')) return;
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {

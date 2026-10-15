@@ -12,6 +12,12 @@ const LarpModule = {
   ADMIN_KEY: 'larp_is_admin',
   ADMIN_PASS_KEY: 'larp_admin_passcode',
 
+  // Supabase Cloud Database Configuration
+  SUPABASE_CONFIG: {
+    url: 'https://ywzjqvgrxdmguasoxwud.supabase.co',
+    key: 'sb_publishable_NROjEKjPXTWEJlTdhS82uA_yBYaIQeg'
+  },
+
   // Permission checks (特定權限驗證)
   isAdmin() {
     return StorageManager.get(this.ADMIN_KEY, false) === true;
@@ -108,12 +114,19 @@ const LarpModule = {
     revealedSpoilers: new Set(),
     tempReviewPhotos: [],
     tempScriptCover: null,
-    showAddReviewModal: false
+    showAddReviewModal: false,
+    syncStatus: 'idle', // 'idle' | 'syncing' | 'synced' | 'error'
+    lastSyncedAt: null
   },
+
+  _initialized: false,
 
   // Initialize module
   init() {
+    if (this._initialized) return;
+    this._initialized = true;
     this.loadScripts();
+    this.syncWithSupabase();
   },
 
   // Helper to generate SVG placeholder poster covers
@@ -318,6 +331,201 @@ const LarpModule = {
     StorageManager.set(this.STORAGE_KEY, this.state.scripts);
   },
 
+  // Supabase REST Helper (Native fetch, zero dependencies)
+  async supabaseRequest(path, options = {}) {
+    const url = `${this.SUPABASE_CONFIG.url}/rest/v1${path}`;
+    const headers = {
+      'apikey': this.SUPABASE_CONFIG.key,
+      'Authorization': `Bearer ${this.SUPABASE_CONFIG.key}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+      ...(options.headers || {})
+    };
+
+    const res = await fetch(url, {
+      ...options,
+      headers
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Supabase error (${res.status}): ${errText}`);
+    }
+
+    if (res.status === 204) return null;
+    return await res.json();
+  },
+
+  mapRowToScript(row, reviews = []) {
+    return {
+      id: row.id,
+      title: row.title,
+      cover: row.cover,
+      playerCount: row.player_count,
+      characterSetup: row.character_setup || '',
+      duration: row.duration || '4 小時',
+      genre: row.genre,
+      type: row.type,
+      needsDm: !!row.needs_dm,
+      difficulty: row.difficulty || '★★★☆☆',
+      rating: parseFloat(row.rating) || 4.5,
+      playedDate: row.played_date || '',
+      summary: row.summary || '',
+      ownerReview: row.owner_review || null,
+      createdAt: row.created_at,
+      reviews: reviews
+    };
+  },
+
+  mapScriptToRow(script) {
+    const playedDate = (script.playedDate && script.playedDate.length === 10) 
+      ? script.playedDate 
+      : new Date().toISOString().split('T')[0];
+
+    return {
+      id: script.id,
+      title: script.title,
+      cover: script.cover || null,
+      player_count: parseInt(script.playerCount, 10) || 6,
+      character_setup: script.characterSetup || '',
+      duration: script.duration || '4 小時',
+      genre: script.genre || '本格',
+      type: script.type || '硬核',
+      needs_dm: !!script.needsDm,
+      difficulty: script.difficulty || '★★★☆☆',
+      rating: parseFloat(script.rating) || 4.5,
+      played_date: playedDate,
+      summary: script.summary || '',
+      owner_review: script.ownerReview || null
+    };
+  },
+
+  mapRowToReview(row) {
+    let photos = [];
+    if (Array.isArray(row.photos)) {
+      photos = row.photos;
+    } else if (typeof row.photos === 'string') {
+      try { photos = JSON.parse(row.photos); } catch(e) { photos = []; }
+    }
+
+    return {
+      id: row.id,
+      userName: row.user_name || '遊玩玩家',
+      playedDate: row.played_date || '',
+      character: row.character || '',
+      rating: parseFloat(row.rating) || 5.0,
+      content: row.content || '',
+      photos: photos,
+      isSpoiler: !!row.is_spoiler,
+      createdAt: row.created_at
+    };
+  },
+
+  mapReviewToRow(review, scriptId) {
+    const playedDate = (review.playedDate && review.playedDate.length === 10) 
+      ? review.playedDate 
+      : new Date().toISOString().split('T')[0];
+
+    return {
+      id: review.id,
+      script_id: scriptId,
+      user_name: review.userName || '遊玩玩家',
+      played_date: playedDate,
+      character: review.character || '',
+      rating: parseFloat(review.rating) || 5.0,
+      content: review.content || '',
+      photos: Array.isArray(review.photos) ? review.photos : [],
+      is_spoiler: !!review.isSpoiler
+    };
+  },
+
+  async syncWithSupabase(isManual = false) {
+    if (this.state.syncStatus === 'syncing') return;
+    this.state.syncStatus = 'syncing';
+    this.renderView();
+
+    try {
+      // 1. Fetch remote scripts & reviews in parallel
+      const [remoteScripts, remoteReviews] = await Promise.all([
+        this.supabaseRequest('/scripts?select=*&order=created_at.desc'),
+        this.supabaseRequest('/reviews?select=*&order=created_at.desc')
+      ]);
+
+      // 2. If remote database is completely empty (first run), auto-seed default scripts!
+      if (!remoteScripts || remoteScripts.length === 0) {
+        console.log('[LARP Sync] Supabase database is empty. Auto-seeding defaults...');
+        await this.seedSupabaseDefaults();
+        const [seededScripts, seededReviews] = await Promise.all([
+          this.supabaseRequest('/scripts?select=*&order=created_at.desc'),
+          this.supabaseRequest('/reviews?select=*&order=created_at.desc')
+        ]);
+        this.processRemoteData(seededScripts, seededReviews);
+      } else {
+        this.processRemoteData(remoteScripts, remoteReviews);
+      }
+
+      this.state.syncStatus = 'synced';
+      this.state.lastSyncedAt = new Date();
+      this.renderView();
+
+      if (isManual) {
+        App.showToast('✅ 雲端資料同步完成！', 'success');
+      }
+    } catch (err) {
+      console.warn('[LARP Sync] Supabase sync error:', err);
+      this.state.syncStatus = 'error';
+      this.renderView();
+      if (isManual) {
+        App.showToast('雲端同步失敗，已切換為本機離線模式', 'error');
+      }
+    }
+  },
+
+  processRemoteData(remoteScripts, remoteReviews) {
+    const reviewsByScriptId = {};
+    (remoteReviews || []).forEach(row => {
+      const sid = row.script_id;
+      if (!reviewsByScriptId[sid]) reviewsByScriptId[sid] = [];
+      reviewsByScriptId[sid].push(this.mapRowToReview(row));
+    });
+
+    const assembledScripts = (remoteScripts || []).map(row => {
+      const revs = reviewsByScriptId[row.id] || [];
+      return this.mapRowToScript(row, revs);
+    });
+
+    this.state.scripts = assembledScripts;
+    this.saveScripts();
+  },
+
+  async seedSupabaseDefaults() {
+    const defaults = this.getDefaultScripts();
+    const scriptRows = defaults.map(s => this.mapScriptToRow(s));
+
+    // Batch insert scripts
+    await this.supabaseRequest('/scripts', {
+      method: 'POST',
+      body: JSON.stringify(scriptRows)
+    });
+
+    // Batch insert default reviews
+    const reviewRows = [];
+    defaults.forEach(s => {
+      if (s.reviews && s.reviews.length > 0) {
+        s.reviews.forEach(r => {
+          reviewRows.push(this.mapReviewToRow(r, s.id));
+        });
+      }
+    });
+
+    if (reviewRows.length > 0) {
+      await this.supabaseRequest('/reviews', {
+        method: 'POST',
+        body: JSON.stringify(reviewRows)
+      });
+    }
+  },
+
   // Client-side image compression using HTML5 Canvas (Crucial for mobile and storage!)
   compressImage(file, maxDimension = 1000, quality = 0.78) {
     return new Promise((resolve, reject) => {
@@ -376,6 +584,7 @@ const LarpModule = {
 
   // Renders the module container
   render() {
+    this.init();
     return `
       <div id="larp-module-container" class="fade-in pb-20">
         ${this.renderCurrentView()}
@@ -420,6 +629,22 @@ const LarpModule = {
           </button>
 
           <div class="flex items-center space-x-1.5">
+            <!-- Cloud Sync Status Button -->
+            <button 
+              onclick="LarpModule.syncWithSupabase(true)" 
+              class="tap-scale px-2 py-1 rounded-xl text-[10px] font-bold flex items-center space-x-1 transition ${
+                this.state.syncStatus === 'syncing' 
+                  ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300' 
+                  : this.state.syncStatus === 'error'
+                  ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+                  : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-900/40'
+              }"
+              title="點擊同步雲端資料庫"
+            >
+              <i data-lucide="${this.state.syncStatus === 'syncing' ? 'refresh-cw' : (this.state.syncStatus === 'error' ? 'cloud-off' : 'cloud')}" class="w-3 h-3 ${this.state.syncStatus === 'syncing' ? 'animate-spin text-blue-500' : ''}"></i>
+              <span>${this.state.syncStatus === 'syncing' ? '同步中' : (this.state.syncStatus === 'error' ? '離線' : '雲端連線')}</span>
+            </button>
+
             <!-- Admin Permission Status Button -->
             <button 
               onclick="LarpModule.toggleAdminLock()" 
@@ -658,6 +883,14 @@ const LarpModule = {
           </button>
 
           <div class="flex items-center space-x-1.5">
+            <button 
+              onclick="LarpModule.syncWithSupabase(true)" 
+              class="tap-scale p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300" 
+              title="重新整理雲端資料"
+            >
+              <i data-lucide="refresh-cw" class="w-4 h-4 ${this.state.syncStatus === 'syncing' ? 'animate-spin text-emerald-500' : ''}"></i>
+            </button>
+
             ${this.isAdmin() ? `
               <button 
                 onclick="LarpModule.deleteScript('${script.id}')" 
@@ -1434,6 +1667,16 @@ const LarpModule = {
     this.closeAddReviewModal();
     App.showToast('🎉 心得評價發布成功！', 'success');
     if ('vibrate' in navigator) navigator.vibrate(30);
+
+    // Sync to Supabase in background
+    this.supabaseRequest('/reviews', {
+      method: 'POST',
+      body: JSON.stringify(this.mapReviewToRow(newReview, scriptId))
+    }).then(() => {
+      this.state.syncStatus = 'synced';
+    }).catch(err => {
+      console.warn('[LARP Sync] Failed to sync review to Supabase:', err);
+    });
   },
 
   async handleScriptCoverSelect(input) {
@@ -1510,6 +1753,16 @@ const LarpModule = {
     this.state.tempScriptCover = null;
     this.switchView('detail', newScript.id);
     App.showToast(`已成功建立劇本《${title}》！`, 'success');
+
+    // Sync to Supabase in background
+    this.supabaseRequest('/scripts', {
+      method: 'POST',
+      body: JSON.stringify(this.mapScriptToRow(newScript))
+    }).then(() => {
+      this.state.syncStatus = 'synced';
+    }).catch(err => {
+      console.warn('[LARP Sync] Failed to sync new script to Supabase:', err);
+    });
   },
 
   deleteReview(reviewId) {
@@ -1536,6 +1789,13 @@ const LarpModule = {
         this.renderView();
         App.showToast('已成功移除心得紀錄', 'success');
         if ('vibrate' in navigator) navigator.vibrate(30);
+
+        // Delete from Supabase
+        this.supabaseRequest(`/reviews?id=eq.${encodeURIComponent(reviewId)}`, {
+          method: 'DELETE'
+        }).catch(err => {
+          console.warn('[LARP Sync] Failed to delete review from Supabase:', err);
+        });
       }
     });
   },
@@ -1560,6 +1820,13 @@ const LarpModule = {
         this.saveScripts();
         this.switchView('list');
         App.showToast(`已刪除劇本《${script.title}》`, 'success');
+
+        // Delete from Supabase (cascades to reviews automatically)
+        this.supabaseRequest(`/scripts?id=eq.${encodeURIComponent(scriptId)}`, {
+          method: 'DELETE'
+        }).catch(err => {
+          console.warn('[LARP Sync] Failed to delete script from Supabase:', err);
+        });
       }
     });
   },
@@ -1586,13 +1853,25 @@ const LarpModule = {
       message: '這將會還原為預設的經典劇本與示範評價，您自訂的新增項目將會被重置。',
       confirmText: '確定還原',
       cancelText: '取消',
-      onConfirm: () => {
+      onConfirm: async () => {
         this.state.scripts = this.getDefaultScripts();
         this.saveScripts();
         this.state.selectedScriptId = null;
         this.state.currentView = 'list';
         this.renderView();
         App.showToast('已還原為預設示範劇本資料', 'success');
+
+        if (this.isAdmin()) {
+          try {
+            await this.supabaseRequest('/scripts?id=neq.placeholder', {
+              method: 'DELETE'
+            });
+            await this.seedSupabaseDefaults();
+            App.showToast('雲端資料庫已同步還原', 'info');
+          } catch (e) {
+            console.warn('[Supabase] Reset remote error:', e);
+          }
+        }
       }
     });
   }
