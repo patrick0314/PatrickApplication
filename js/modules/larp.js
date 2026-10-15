@@ -9,6 +9,77 @@ const LarpModule = {
   icon: 'book-open',
 
   STORAGE_KEY: 'larp_scripts_v1',
+  ADMIN_KEY: 'larp_is_admin',
+  ADMIN_PASS_KEY: 'larp_admin_passcode',
+
+  // Permission checks (特定權限驗證)
+  isAdmin() {
+    return StorageManager.get(this.ADMIN_KEY, false) === true;
+  },
+
+  getAdminPasscode() {
+    return StorageManager.get(this.ADMIN_PASS_KEY, '1314');
+  },
+
+  setAdminStatus(status) {
+    StorageManager.set(this.ADMIN_KEY, !!status);
+  },
+
+  async verifyAdminOrPrompt(onSuccess) {
+    if (this.isAdmin()) {
+      if (onSuccess) onSuccess();
+      return true;
+    }
+
+    const input = await App.prompt({
+      title: '🔒 管理員權限驗證',
+      placeholder: '請輸入管理密碼 (預設: 1314)',
+      confirmText: '解鎖驗證',
+      cancelText: '取消'
+    });
+
+    if (!input) return false;
+
+    if (input.trim() === this.getAdminPasscode()) {
+      this.setAdminStatus(true);
+      App.showToast('👑 管理員權限已解鎖！', 'success');
+      this.renderView();
+      if (onSuccess) onSuccess();
+      return true;
+    } else {
+      App.showToast('密碼錯誤，權限不足', 'error');
+      return false;
+    }
+  },
+
+  toggleAdminLock() {
+    if (this.isAdmin()) {
+      App.confirm({
+        title: '確定要鎖定管理權限嗎？',
+        message: '鎖定後將隱藏移除心得按鈕，且需重新驗證才能新增劇本。',
+        confirmText: '鎖定權限',
+        cancelText: '保持解鎖',
+        isDestructive: false,
+        onConfirm: () => {
+          this.setAdminStatus(false);
+          this.renderView();
+          App.showToast('已鎖定管理權限', 'info');
+        }
+      });
+    } else {
+      this.verifyAdminOrPrompt();
+    }
+  },
+
+  handleClickCreateScript() {
+    if (this.isAdmin()) {
+      this.switchView('create');
+    } else {
+      this.verifyAdminOrPrompt(() => {
+        this.switchView('create');
+      });
+    }
+  },
 
   state: {
     currentView: 'list', // 'list' | 'detail' | 'create'
@@ -334,12 +405,31 @@ const LarpModule = {
             <span>返回功能列表</span>
           </button>
 
-          <div class="flex items-center space-x-2">
+          <div class="flex items-center space-x-1.5">
+            <!-- Admin Permission Status Button -->
             <button 
-              onclick="LarpModule.switchView('create')" 
-              class="tap-scale px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs flex items-center space-x-1 shadow-md shadow-emerald-600/20"
+              onclick="LarpModule.toggleAdminLock()" 
+              class="tap-scale px-2.5 py-1 rounded-xl text-[10px] font-bold flex items-center space-x-1 transition ${
+                this.isAdmin() 
+                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-900/40' 
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+              }"
+              title="${this.isAdmin() ? '已具備管理員權限 (點擊可鎖定)' : '點擊解鎖管理員權限'}"
             >
-              <i data-lucide="plus" class="w-3.5 h-3.5 stroke-[3]"></i>
+              <i data-lucide="${this.isAdmin() ? 'crown' : 'lock'}" class="w-3 h-3 ${this.isAdmin() ? 'text-amber-500' : ''}"></i>
+              <span>${this.isAdmin() ? '版主已解鎖' : '管理權限'}</span>
+            </button>
+
+            <!-- Create Script Button (Protected by permission) -->
+            <button 
+              onclick="LarpModule.handleClickCreateScript()" 
+              class="tap-scale px-3 py-1.5 rounded-full ${
+                this.isAdmin()
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-600/20'
+                  : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300/50 dark:border-slate-700/50'
+              } font-bold text-xs flex items-center space-x-1"
+            >
+              <i data-lucide="${this.isAdmin() ? 'plus' : 'lock'}" class="w-3.5 h-3.5 stroke-[2.5]"></i>
               <span>新增劇本</span>
             </button>
           </div>
@@ -545,7 +635,7 @@ const LarpModule = {
     const reviews = script.reviews || [];
 
     return `
-      <div class="space-y-4">
+      <div class="space-y-4 pb-32">
         <!-- Top Navigation -->
         <div class="flex items-center justify-between pt-1">
           <button onclick="LarpModule.switchView('list')" class="flex items-center space-x-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 tap-scale">
@@ -553,7 +643,17 @@ const LarpModule = {
             <span>返回劇本列表</span>
           </button>
 
-          <div class="flex items-center space-x-2">
+          <div class="flex items-center space-x-1.5">
+            ${this.isAdmin() ? `
+              <button 
+                onclick="LarpModule.deleteScript('${script.id}')" 
+                class="tap-scale p-1.5 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200/50 dark:border-red-900/40" 
+                title="管理員：刪除此劇本"
+              >
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
+
             <button onclick="LarpModule.shareScript('${script.id}')" class="tap-scale p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300" title="複製劇本資訊">
               <i data-lucide="share-2" class="w-4 h-4"></i>
             </button>
@@ -708,9 +808,22 @@ const LarpModule = {
             </div>
           </div>
 
-          <!-- Stars -->
-          <div class="text-xs text-amber-500 font-black tracking-tight" title="${rev.rating} 顆星">
-            ${starString}
+          <div class="flex items-center space-x-1.5">
+            <!-- Stars -->
+            <div class="text-xs text-amber-500 font-black tracking-tight" title="${rev.rating} 顆星">
+              ${starString}
+            </div>
+
+            <!-- Admin Delete Review Button (Visible ONLY to Admins) -->
+            ${this.isAdmin() ? `
+              <button 
+                onclick="event.stopPropagation(); LarpModule.deleteReview('${rev.id}')"
+                class="tap-scale p-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+                title="管理員：移除此心得"
+              >
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            ` : ''}
           </div>
         </div>
 
@@ -1329,6 +1442,11 @@ const LarpModule = {
   },
 
   submitCreateScript() {
+    if (!this.isAdmin()) {
+      App.showToast('權限不足，僅限管理員新增劇本', 'error');
+      return;
+    }
+
     const title = (document.getElementById('new-script-title')?.value || '').trim();
     if (!title) {
       App.showToast('請填寫劇本名稱', 'warning');
@@ -1378,6 +1496,58 @@ const LarpModule = {
     this.state.tempScriptCover = null;
     this.switchView('detail', newScript.id);
     App.showToast(`已成功建立劇本《${title}》！`, 'success');
+  },
+
+  deleteReview(reviewId) {
+    if (!this.isAdmin()) {
+      App.showToast('權限不足，僅限管理員移除心得', 'error');
+      return;
+    }
+
+    const script = this.state.scripts.find(s => s.id === this.state.selectedScriptId);
+    if (!script || !script.reviews) return;
+
+    const targetReview = script.reviews.find(r => r.id === reviewId);
+    const reviewerName = targetReview ? targetReview.userName : '此玩家';
+
+    App.confirm({
+      title: '確定要移除這筆心得嗎？',
+      message: `即將刪除「${reviewerName}」的遊玩評價紀錄，此動作無法復原。`,
+      confirmText: '確定移除',
+      cancelText: '取消',
+      isDestructive: true,
+      onConfirm: () => {
+        script.reviews = script.reviews.filter(r => r.id !== reviewId);
+        this.saveScripts();
+        this.renderView();
+        App.showToast('已成功移除心得紀錄', 'success');
+        if ('vibrate' in navigator) navigator.vibrate(30);
+      }
+    });
+  },
+
+  deleteScript(scriptId) {
+    if (!this.isAdmin()) {
+      App.showToast('權限不足，僅限管理員刪除劇本', 'error');
+      return;
+    }
+
+    const script = this.state.scripts.find(s => s.id === scriptId);
+    if (!script) return;
+
+    App.confirm({
+      title: `確定要刪除劇本《${script.title}》嗎？`,
+      message: '刪除後此劇本及其所有心得評價將一併移除，無法復原。',
+      confirmText: '確定刪除',
+      cancelText: '取消',
+      isDestructive: true,
+      onConfirm: () => {
+        this.state.scripts = this.state.scripts.filter(s => s.id !== scriptId);
+        this.saveScripts();
+        this.switchView('list');
+        App.showToast(`已刪除劇本《${script.title}》`, 'success');
+      }
+    });
   },
 
   shareScript(scriptId) {
