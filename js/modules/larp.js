@@ -583,6 +583,8 @@ const LarpModule = {
     this.state.showAddReviewModal = false;
     this.state.tempReviewPhotos = [];
     this.state.tempScriptCover = null;
+    this._reviewDraft = null;
+    document.querySelector('.bottom-nav')?.classList.remove('translate-y-full', 'pointer-events-none');
     this.renderView();
   },
 
@@ -1047,7 +1049,8 @@ const LarpModule = {
   // Single Review Item in Community Wall
   renderReviewItem(rev) {
     const isSpoilerRevealed = this.state.revealedSpoilers.has(rev.id);
-    const starString = '★'.repeat(Math.round(rev.rating)) + '☆'.repeat(5 - Math.round(rev.rating));
+    const starString = this.renderStars(rev.rating);
+    const ratingNum = Number(rev.rating !== undefined ? rev.rating : 5).toFixed(1);
 
     return `
       <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 space-y-2">
@@ -1071,9 +1074,10 @@ const LarpModule = {
           </div>
 
           <div class="flex items-center space-x-1.5">
-            <!-- Stars -->
-            <div class="text-xs text-amber-500 font-black tracking-tight" title="${rev.rating} 顆星">
-              ${starString}
+            <!-- Stars & Score -->
+            <div class="flex items-center space-x-1 text-xs text-amber-500 font-black tracking-tight" title="${ratingNum} 顆星">
+              <span>${starString}</span>
+              <span class="text-[10px] font-bold text-amber-600 dark:text-amber-400">(${ratingNum})</span>
             </div>
 
             <!-- Admin Delete Review Button (Visible ONLY to Admins) -->
@@ -1125,27 +1129,33 @@ const LarpModule = {
   },
 
   // Modal: Add Friend's Review (心得評價填寫表單)
+  // Modal: Add Friend's Review (心得評價填寫表單)
   renderAddReviewModal(script) {
     const settings = StorageManager.get('settings', { userName: '遊玩玩家' });
     const defaultName = settings.userName || '遊玩玩家';
     const todayStr = new Date().toISOString().split('T')[0];
+    const ratingVal = this._tempRating !== undefined ? this._tempRating : (this._reviewDraft?.rating !== undefined ? this._reviewDraft.rating : 5);
 
     return `
-      <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-fade-in">
-        <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-5 border border-slate-100 dark:border-slate-800 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar space-y-4">
+      <div 
+        id="larp-add-review-modal"
+        class="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-fade-in"
+        onclick="if(event.target === this) LarpModule.closeAddReviewModal()"
+      >
+        <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-5 border border-slate-100 dark:border-slate-800 shadow-2xl max-h-[88vh] flex flex-col space-y-3.5">
           <!-- Modal Header -->
-          <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <div>
               <h3 class="text-sm font-black text-slate-900 dark:text-white">新增遊玩心得</h3>
               <p class="text-[10px] text-slate-400">劇本：《${script.title}》</p>
             </div>
-            <button onclick="LarpModule.closeAddReviewModal()" class="p-1 rounded-full text-slate-400 hover:text-slate-600 tap-scale">
+            <button type="button" onclick="LarpModule.closeAddReviewModal()" class="p-1 rounded-full text-slate-400 hover:text-slate-600 tap-scale">
               <i data-lucide="x" class="w-5 h-5"></i>
             </button>
           </div>
 
-          <!-- Form Fields -->
-          <div class="space-y-3.5">
+          <!-- Scrollable Form Fields Body -->
+          <div class="flex-1 overflow-y-auto no-scrollbar space-y-3.5 pr-0.5">
             <!-- User Name & Play Date -->
             <div class="grid grid-cols-2 gap-2">
               <div>
@@ -1153,7 +1163,7 @@ const LarpModule = {
                 <input 
                   type="text" 
                   id="rev-input-name" 
-                  value="${defaultName}"
+                  value="${this._reviewDraft?.name !== undefined ? this._reviewDraft.name : defaultName}"
                   class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 >
               </div>
@@ -1162,38 +1172,78 @@ const LarpModule = {
                 <input 
                   type="date" 
                   id="rev-input-date" 
-                  value="${todayStr}"
+                  value="${this._reviewDraft?.date !== undefined ? this._reviewDraft.date : todayStr}"
                   class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 >
               </div>
             </div>
 
-            <!-- Character Played & Star Rating -->
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">飾演角色 (選填)</label>
-                <input 
-                  type="text" 
-                  id="rev-input-character" 
-                  placeholder="例如：陸澤遠"
-                  class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                >
+            <!-- Character Played -->
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">飾演角色 (選填)</label>
+              <input 
+                type="text" 
+                id="rev-input-character" 
+                value="${this._reviewDraft?.character !== undefined ? this._reviewDraft.character : ''}"
+                placeholder="例如：陸澤遠"
+                class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              >
+            </div>
+
+            <!-- Star Rating Control (0 ~ 5 分，每階 0.5) -->
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">心得評分 (0 ~ 5 星)</span>
+                <div class="flex items-center space-x-1.5">
+                  <span id="review-rating-stars" class="text-sm text-amber-500 font-bold tracking-tight">
+                    ${this.renderStars(ratingVal)}
+                  </span>
+                  <span id="review-rating-badge" class="px-2 py-0.5 rounded-lg bg-amber-500 text-white font-black text-xs shadow-sm shadow-amber-500/20">
+                    ${Number(ratingVal).toFixed(1)} ★
+                  </span>
+                </div>
               </div>
 
-              <div>
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">評分打星 (1~5)</label>
-                <div class="flex items-center space-x-1 py-1.5">
-                  ${[1, 2, 3, 4, 5].map(star => `
-                    <button 
-                      type="button"
-                      onclick="LarpModule.setTempReviewRating(${star})"
-                      id="star-btn-${star}"
-                      class="text-xl tap-scale transition ${star <= (this._tempRating || 5) ? 'text-amber-400 scale-110' : 'text-slate-300 dark:text-slate-600'}"
-                    >
-                      ★
-                    </button>
-                  `).join('')}
-                </div>
+              <!-- Range Slider with Step 0.5 -->
+              <div class="flex items-center space-x-2 pt-1">
+                <button 
+                  type="button" 
+                  onclick="LarpModule.adjustTempRating(-0.5)"
+                  class="tap-scale px-2 py-1 rounded-xl bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-xs shadow-sm border border-slate-200 dark:border-slate-600"
+                  title="-0.5 分"
+                >
+                  -0.5
+                </button>
+
+                <input 
+                  type="range" 
+                  id="rev-rating-slider"
+                  min="0" 
+                  max="5" 
+                  step="0.5" 
+                  value="${ratingVal}"
+                  oninput="LarpModule.setTempReviewRating(this.value)"
+                  class="flex-1 accent-amber-500 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none"
+                >
+
+                <button 
+                  type="button" 
+                  onclick="LarpModule.adjustTempRating(0.5)"
+                  class="tap-scale px-2 py-1 rounded-xl bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-xs shadow-sm border border-slate-200 dark:border-slate-600"
+                  title="+0.5 分"
+                >
+                  +0.5
+                </button>
+              </div>
+
+              <!-- Quick Presets -->
+              <div class="flex items-center justify-between text-[10px] text-slate-400 font-bold pt-0.5 px-0.5">
+                <button type="button" onclick="LarpModule.setTempReviewRating(0)" class="hover:text-amber-500 tap-scale">0分</button>
+                <button type="button" onclick="LarpModule.setTempReviewRating(1)" class="hover:text-amber-500 tap-scale">1★</button>
+                <button type="button" onclick="LarpModule.setTempReviewRating(2)" class="hover:text-amber-500 tap-scale">2★</button>
+                <button type="button" onclick="LarpModule.setTempReviewRating(3)" class="hover:text-amber-500 tap-scale">3★</button>
+                <button type="button" onclick="LarpModule.setTempReviewRating(4)" class="hover:text-amber-500 tap-scale">4★</button>
+                <button type="button" onclick="LarpModule.setTempReviewRating(5)" class="hover:text-amber-500 tap-scale">5★</button>
               </div>
             </div>
 
@@ -1205,7 +1255,7 @@ const LarpModule = {
                 rows="3" 
                 placeholder="分享你的推理過程、角色情感或現場打卡體驗..."
                 class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-              ></textarea>
+              >${this._reviewDraft?.content !== undefined ? this._reviewDraft.content : ''}</textarea>
             </div>
 
             <!-- Is Spoiler Switch -->
@@ -1217,7 +1267,7 @@ const LarpModule = {
                   <p class="text-[9px] text-slate-400">勾選後將主動為心得加上防雷遮罩</p>
                 </div>
               </div>
-              <input type="checkbox" id="rev-input-spoiler" class="w-4 h-4 accent-emerald-600 rounded">
+              <input type="checkbox" id="rev-input-spoiler" ${this._reviewDraft?.isSpoiler ? 'checked' : ''} class="w-4 h-4 accent-emerald-600 rounded">
             </div>
 
             <!-- Client-side Photo Upload with Compression -->
@@ -1235,31 +1285,23 @@ const LarpModule = {
                   <span class="text-[8px] font-bold mt-0.5">加照片</span>
                   <input 
                     type="file" 
+                    id="rev-photo-input"
                     accept="image/*" 
                     class="hidden" 
                     onchange="LarpModule.handleReviewPhotoSelect(this)"
                   >
                 </label>
 
-                <!-- Thumbnails of Selected Photos -->
-                ${this.state.tempReviewPhotos.map((imgUrl, idx) => `
-                  <div class="relative w-16 h-16 rounded-2xl overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 shadow-sm group">
-                    <img src="${imgUrl}" alt="照片預覽" class="w-full h-full object-cover">
-                    <button 
-                      type="button"
-                      onclick="LarpModule.removeTempPhoto(${idx})"
-                      class="absolute top-1 right-1 p-0.5 rounded-full bg-red-500 text-white shadow-sm tap-scale"
-                    >
-                      <i data-lucide="x" class="w-3 h-3"></i>
-                    </button>
-                  </div>
-                `).join('')}
+                <!-- Thumbnails of Selected Photos (Updated directly without form re-rendering) -->
+                <div id="review-photos-preview-list" class="flex items-center space-x-2">
+                  ${this.renderReviewPhotoThumbnails()}
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- Submit Button -->
-          <div class="pt-2">
+          <!-- Submit Button Fixed at bottom of modal (Safe from bottom nav & gestures) -->
+          <div class="pt-2 pb-6 sm:pb-0 shrink-0 border-t border-slate-100 dark:border-slate-800">
             <button 
               type="button"
               onclick="LarpModule.submitReview('${script.id}')"
@@ -1601,30 +1643,71 @@ const LarpModule = {
     this.renderView();
   },
 
+  renderStars(rating) {
+    const val = Number(rating) || 0;
+    const full = Math.floor(val);
+    const hasHalf = (val % 1) >= 0.5;
+    const empty = Math.max(0, 5 - full - (hasHalf ? 1 : 0));
+    return '★'.repeat(full) + (hasHalf ? '½' : '') + '☆'.repeat(empty);
+  },
+
   openAddReviewModal() {
     this.state.showAddReviewModal = true;
     this.state.tempReviewPhotos = [];
     this._tempRating = 5;
+    this._reviewDraft = null;
+    document.querySelector('.bottom-nav')?.classList.add('translate-y-full', 'pointer-events-none');
     this.renderView();
   },
 
   closeAddReviewModal() {
     this.state.showAddReviewModal = false;
     this.state.tempReviewPhotos = [];
+    this._reviewDraft = null;
+    document.querySelector('.bottom-nav')?.classList.remove('translate-y-full', 'pointer-events-none');
     this.renderView();
   },
 
   setTempReviewRating(val) {
-    this._tempRating = val;
-    for (let i = 1; i <= 5; i++) {
-      const el = document.getElementById(`star-btn-${i}`);
-      if (el) {
-        if (i <= val) {
-          el.className = 'text-xl tap-scale transition text-amber-400 scale-110';
-        } else {
-          el.className = 'text-xl tap-scale transition text-slate-300 dark:text-slate-600';
-        }
-      }
+    const num = Math.max(0, Math.min(5, Math.round(Number(val) * 2) / 2));
+    this._tempRating = num;
+    if (this._reviewDraft) this._reviewDraft.rating = num;
+
+    const slider = document.getElementById('rev-rating-slider');
+    if (slider) slider.value = num;
+
+    const badge = document.getElementById('review-rating-badge');
+    if (badge) badge.textContent = `${num.toFixed(1)} ★`;
+
+    const stars = document.getElementById('review-rating-stars');
+    if (stars) stars.textContent = this.renderStars(num);
+  },
+
+  adjustTempRating(delta) {
+    const current = Number(this._tempRating !== undefined ? this._tempRating : 5);
+    this.setTempReviewRating(current + delta);
+  },
+
+  renderReviewPhotoThumbnails() {
+    return this.state.tempReviewPhotos.map((imgUrl, idx) => `
+      <div class="relative w-16 h-16 rounded-2xl overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 shadow-sm group">
+        <img src="${imgUrl}" alt="照片預覽" class="w-full h-full object-cover">
+        <button 
+          type="button"
+          onclick="LarpModule.removeTempPhoto(${idx})"
+          class="absolute top-1 right-1 p-0.5 rounded-full bg-red-500 text-white shadow-sm tap-scale"
+        >
+          <i data-lucide="x" class="w-3 h-3"></i>
+        </button>
+      </div>
+    `).join('');
+  },
+
+  updateReviewPhotosPreview() {
+    const list = document.getElementById('review-photos-preview-list');
+    if (list) {
+      list.innerHTML = this.renderReviewPhotoThumbnails();
+      if (window.lucide) lucide.createIcons();
     }
   },
 
@@ -1635,8 +1718,9 @@ const LarpModule = {
       App.showToast('正在優化壓縮照片...', 'info');
       const compressedDataUrl = await this.compressImage(file, 900, 0.75);
       this.state.tempReviewPhotos.push(compressedDataUrl);
-      this.renderView();
-      App.showToast('照片壓縮已就緒！', 'success');
+      this.updateReviewPhotosPreview();
+      input.value = '';
+      App.showToast('照片已加入！', 'success');
     } catch (err) {
       App.showToast(err.message || '照片上傳失敗', 'error');
     }
@@ -1644,10 +1728,10 @@ const LarpModule = {
 
   removeTempPhoto(idx) {
     this.state.tempReviewPhotos.splice(idx, 1);
-    this.renderView();
+    this.updateReviewPhotosPreview();
   },
 
-  submitReview(scriptId) {
+  async submitReview(scriptId) {
     const script = this.state.scripts.find(s => s.id === scriptId);
     if (!script) return;
 
@@ -1656,7 +1740,7 @@ const LarpModule = {
     const character = (document.getElementById('rev-input-character')?.value || '').trim();
     const content = (document.getElementById('rev-input-content')?.value || '').trim();
     const isSpoiler = document.getElementById('rev-input-spoiler')?.checked || false;
-    const rating = this._tempRating || 5;
+    const rating = Math.max(0, Math.min(5, Math.round(Number(this._tempRating !== undefined ? this._tempRating : 5) * 2) / 2));
 
     if (!content) {
       App.showToast('請填寫心得感想', 'warning');
@@ -1676,12 +1760,15 @@ const LarpModule = {
       createdAt: new Date().toISOString()
     };
 
-    script.reviews.unshift(newReview);
-    this.saveScripts();
+    // Close modal & restore bottom nav
     this.closeAddReviewModal();
-    this.renderView();
     App.showToast('🎉 心得評價發布中...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(30);
+
+    // Optimistically update
+    script.reviews.unshift(newReview);
+    this.saveScripts();
+    this.renderView();
 
     // Sync to Supabase
     this.supabaseRequest('/reviews', {
