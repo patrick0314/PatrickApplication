@@ -38,6 +38,13 @@ const App = {
       init: () => ArthurModule.init()
     },
     {
+      id: 'larp',
+      name: '劇本殺紀錄',
+      icon: 'book-open',
+      render: () => LarpModule.render(),
+      init: () => LarpModule.init()
+    },
+    {
       id: 'settings',
       name: '設定',
       icon: 'settings',

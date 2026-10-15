@@ -1,4 +1,4 @@
-const CACHE_NAME = 'my-app-v35';
+const CACHE_NAME = 'my-app-v36';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const ASSETS_TO_CACHE = [
   './js/modules/werewolf.js',
   './js/modules/codenames.js',
   './js/modules/arthur.js',
+  './js/modules/larp.js',
   './js/modules/settings.js',
   './icons/icon-192.png',
   './icons/icon-512.png',

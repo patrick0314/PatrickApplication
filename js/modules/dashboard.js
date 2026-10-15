@@ -43,6 +43,17 @@ const DashboardModule = {
       shadow: 'shadow-amber-950/30',
       badgeClass: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/30',
       action: () => App.switchTab('arthur')
+    },
+    {
+      id: 'larp',
+      name: '劇本殺紀錄',
+      category: '心得評價',
+      emoji: '📜',
+      desc: '劇本探案庫 · 評價排雷與好友打卡',
+      gradient: 'from-emerald-950 via-slate-900 to-teal-950',
+      shadow: 'shadow-teal-950/30',
+      badgeClass: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/30',
+      action: () => App.switchTab('larp')
     }
   ],
 
