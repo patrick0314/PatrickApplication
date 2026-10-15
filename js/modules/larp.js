@@ -352,8 +352,6 @@ const LarpModule = {
               <span class="text-xl">📜</span>
               <span>LARP Records · 劇本殺探案紀錄</span>
             </div>
-            <h2 class="text-xl font-black text-white tracking-tight">探案日誌與好友評價</h2>
-            <p class="text-xs text-slate-300">精選遊玩劇本、深度排雷心得、好友打卡評價牆</p>
 
             <div class="pt-2 flex items-center space-x-4 text-[11px] font-bold text-emerald-300/90">
               <span class="flex items-center space-x-1">
@@ -462,16 +460,6 @@ const LarpModule = {
               </button>
             </div>
           ` : filteredScripts.map(s => this.renderScriptCard(s)).join('')}
-        </div>
-
-        <!-- Bottom Demo Data Reset / Actions -->
-        <div class="pt-4 text-center">
-          <button 
-            onclick="LarpModule.resetToDemoData()" 
-            class="text-[11px] font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline"
-          >
-            重置還原為預設示範劇本資料
-          </button>
         </div>
       </div>
     `;
@@ -665,21 +653,13 @@ const LarpModule = {
                 好友遊玩心得牆 (${reviews.length})
               </h3>
             </div>
-            <button 
-              onclick="LarpModule.openAddReviewModal()"
-              class="tap-scale px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 font-bold text-[11px] flex items-center space-x-1 border border-emerald-200/60 dark:border-emerald-900/40"
-            >
-              <i data-lucide="edit-3" class="w-3 h-3"></i>
-              <span>寫心得</span>
-            </button>
           </div>
 
           <!-- Reviews List -->
           <div class="space-y-3">
             ${reviews.length === 0 ? `
-              <div class="text-center py-6 text-xs text-slate-400 space-y-2">
+              <div class="text-center py-6 text-xs text-slate-400">
                 <p>目前尚無好友留言，成為第一個留下遊玩心得的人吧！</p>
-                <button onclick="LarpModule.openAddReviewModal()" class="text-emerald-600 dark:text-emerald-400 font-bold underline">立即新增心得</button>
               </div>
             ` : reviews.map(rev => this.renderReviewItem(rev)).join('')}
           </div>
