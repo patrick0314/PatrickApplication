@@ -318,7 +318,7 @@ const LarpModule = {
   // Load from local storage or initialize with defaults
   loadScripts() {
     const saved = StorageManager.get(this.STORAGE_KEY, null);
-    if (saved && Array.isArray(saved) && saved.length > 0) {
+    if (saved && Array.isArray(saved)) {
       this.state.scripts = saved;
     } else {
       this.state.scripts = this.getDefaultScripts();
@@ -361,10 +361,14 @@ const LarpModule = {
   },
 
   mapRowToScript(row, reviews = []) {
+    const cover = (row.cover && row.cover.trim().length > 0)
+      ? row.cover
+      : this.createSvgCover(row.title || '劇本', `${row.genre || '本格'} · ${row.type || '硬核'}`, ['#1e293b', '#334155', '#0f172a'], '🎭');
+
     return {
       id: row.id,
       title: row.title,
-      cover: row.cover,
+      cover: cover,
       playerCount: row.player_count,
       characterSetup: row.character_setup || '',
       duration: row.duration || '4 小時',
@@ -455,16 +459,24 @@ const LarpModule = {
         this.supabaseRequest('/reviews?select=*&order=created_at.desc')
       ]);
 
-      // 2. If remote database is completely empty (first run), auto-seed default scripts!
+      // 2. If remote database is completely empty (first run), check if ever initialized
       if (!remoteScripts || remoteScripts.length === 0) {
-        console.log('[LARP Sync] Supabase database is empty. Auto-seeding defaults...');
-        await this.seedSupabaseDefaults();
-        const [seededScripts, seededReviews] = await Promise.all([
-          this.supabaseRequest('/scripts?select=*&order=created_at.desc'),
-          this.supabaseRequest('/reviews?select=*&order=created_at.desc')
-        ]);
-        this.processRemoteData(seededScripts, seededReviews);
+        const hasInitialized = StorageManager.get('larp_has_initialized', false);
+        if (!hasInitialized) {
+          console.log('[LARP Sync] Supabase database is empty. Auto-seeding defaults...');
+          await this.seedSupabaseDefaults();
+          StorageManager.set('larp_has_initialized', true);
+          const [seededScripts, seededReviews] = await Promise.all([
+            this.supabaseRequest('/scripts?select=*&order=created_at.desc'),
+            this.supabaseRequest('/reviews?select=*&order=created_at.desc')
+          ]);
+          this.processRemoteData(seededScripts, seededReviews);
+        } else {
+          this.state.scripts = [];
+          this.saveScripts();
+        }
       } else {
+        StorageManager.set('larp_has_initialized', true);
         this.processRemoteData(remoteScripts, remoteReviews);
       }
 
@@ -1747,7 +1759,6 @@ const LarpModule = {
       return;
     }
 
-    if (!script.reviews) script.reviews = [];
     const newReview = {
       id: 'rev-' + Date.now(),
       userName: name,
@@ -1760,27 +1771,26 @@ const LarpModule = {
       createdAt: new Date().toISOString()
     };
 
-    // Close modal & restore bottom nav
-    this.closeAddReviewModal();
-    App.showToast('🎉 心得評價發布中...', 'info');
-    if ('vibrate' in navigator) navigator.vibrate(30);
+    App.showToast('正在發布並同步心得至雲端...', 'info');
 
-    // Optimistically update
-    script.reviews.unshift(newReview);
-    this.saveScripts();
-    this.renderView();
+    try {
+      await this.supabaseRequest('/reviews', {
+        method: 'POST',
+        body: JSON.stringify(this.mapReviewToRow(newReview, scriptId))
+      });
 
-    // Sync to Supabase
-    this.supabaseRequest('/reviews', {
-      method: 'POST',
-      body: JSON.stringify(this.mapReviewToRow(newReview, scriptId))
-    }).then(() => {
+      if (!script.reviews) script.reviews = [];
+      script.reviews.unshift(newReview);
+      this.saveScripts();
       this.state.syncStatus = 'synced';
-      App.showToast('✅ 心得已同步至雲端！', 'success');
-    }).catch(err => {
-      console.warn('[LARP Sync] Failed to sync review to Supabase:', err);
-      App.showToast('已於本機儲存（雲端連線異常）', 'warning');
-    });
+      this.closeAddReviewModal();
+      this.renderView();
+      App.showToast('🎉 心得已成功同步至雲端！', 'success');
+      if ('vibrate' in navigator) navigator.vibrate(30);
+    } catch (err) {
+      console.error('[LARP Sync] Failed to sync review to Supabase:', err);
+      App.showToast('發布失敗：' + (err.message || '雲端連線異常，請稍後再試'), 'error');
+    }
   },
 
   async handleScriptCoverSelect(input) {
