@@ -102,6 +102,7 @@ const LarpModule = {
   },
 
   AVAILABLE_TYPES: ['硬核', '情感', '還原', '歡樂', '陣營', '恐怖', '機制', '微恐', '立意', '沉浸'],
+  DEMO_SCRIPT_IDS: ['script-1', 'script-2', 'script-3', 'script-4', 'larp-001', 'larp-002', 'larp-003', 'larp-004'],
 
   state: {
     currentView: 'list', // 'list' | 'detail' | 'create'
@@ -186,8 +187,8 @@ const LarpModule = {
   loadScripts() {
     const saved = StorageManager.get(this.STORAGE_KEY, []);
     if (saved && Array.isArray(saved)) {
-      // Filter out any legacy built-in/demo script IDs
-      this.state.scripts = saved.filter(s => s && s.id && !['script-1', 'script-2', 'script-3', 'script-4', 'larp-001', 'larp-002', 'larp-003', 'larp-004'].includes(s.id));
+      // Strictly filter out any legacy built-in/demo script IDs
+      this.state.scripts = saved.filter(s => s && s.id && !this.DEMO_SCRIPT_IDS.includes(s.id));
     } else {
       this.state.scripts = [];
     }
@@ -377,10 +378,12 @@ const LarpModule = {
       reviewsByScriptId[sid].push(this.mapRowToReview(row));
     });
 
-    const assembledScripts = (remoteScripts || []).map(row => {
-      const revs = reviewsByScriptId[row.id] || [];
-      return this.mapRowToScript(row, revs);
-    });
+    const assembledScripts = (remoteScripts || [])
+      .filter(row => row && row.id && !this.DEMO_SCRIPT_IDS.includes(row.id))
+      .map(row => {
+        const revs = reviewsByScriptId[row.id] || [];
+        return this.mapRowToScript(row, revs);
+      });
 
     this.state.scripts = assembledScripts;
     this.saveScripts();
@@ -685,7 +688,22 @@ const LarpModule = {
 
         <!-- Script Cards List -->
         <div class="space-y-3 pt-1">
-          ${filteredScripts.length === 0 ? `
+          ${this.state.scripts.length === 0 ? `
+            <div class="text-center py-16 rounded-3xl bg-white dark:bg-slate-800/90 border border-slate-100 dark:border-slate-800 space-y-3 px-6 shadow-sm">
+              <span class="text-5xl">🎭</span>
+              <h4 class="text-sm font-black text-slate-800 dark:text-white">目前尚無任何劇本</h4>
+              <p class="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
+                資料庫乾淨純淨，點擊下方「新增劇本」即可發布您的第一本劇本！
+              </p>
+              <button 
+                onclick="LarpModule.handleClickCreateScript()" 
+                class="tap-scale inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-xs shadow-md shadow-emerald-500/20"
+              >
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>立即建立新劇本</span>
+              </button>
+            </div>
+          ` : filteredScripts.length === 0 ? `
             <div class="text-center py-12 rounded-3xl bg-white dark:bg-slate-800/90 border border-slate-100 dark:border-slate-800 space-y-3">
               <span class="text-4xl">🔍</span>
               <p class="text-xs font-bold text-slate-600 dark:text-slate-300">查無符合條件的劇本</p>
