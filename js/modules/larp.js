@@ -101,13 +101,15 @@ const LarpModule = {
     }
   },
 
+  AVAILABLE_TYPES: ['硬核', '情感', '還原', '歡樂', '陣營', '恐怖', '機制', '微恐', '立意', '沉浸'],
+
   state: {
     currentView: 'list', // 'list' | 'detail' | 'create'
     selectedScriptId: null,
     searchQuery: '',
     filterStatus: 'all', // 'all' | 'played' | 'unplayed'
     filterGenre: 'all',
-    filterType: 'all',
+    filterTypes: [], // multi-select filter array (empty = all)
     filterPlayers: 'all',
     sortBy: 'rating', // 'rating' | 'newest' | 'players'
     scripts: [],
@@ -116,6 +118,7 @@ const LarpModule = {
     tempReviewPhotos: [],
     tempScriptCover: null,
     tempCharacters: [],
+    tempScriptTypes: ['硬核'], // multi-select types when creating script
     showAddReviewModal: false,
     syncStatus: 'idle', // 'idle' | 'syncing' | 'synced' | 'error'
     lastSyncedAt: null
@@ -129,6 +132,22 @@ const LarpModule = {
     this._initialized = true;
     this.loadScripts();
     this.syncWithSupabase();
+  },
+
+  // Helper to get script styles as array
+  getScriptTypes(scriptOrRow) {
+    if (Array.isArray(scriptOrRow?.types) && scriptOrRow.types.length > 0) {
+      return scriptOrRow.types;
+    }
+    const raw = scriptOrRow?.type;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw.map(s => String(s).trim()).filter(Boolean);
+    }
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+      const parts = raw.split(/[,、/，\s·]+/).map(s => s.trim()).filter(Boolean);
+      if (parts.length > 0) return parts;
+    }
+    return ['硬核'];
   },
 
   // Helper to check if a script has been played (has at least 1 review/rating)
@@ -210,9 +229,10 @@ const LarpModule = {
   },
 
   mapRowToScript(row, reviews = []) {
+    const types = this.getScriptTypes(row);
     const cover = (row.cover && row.cover.trim().length > 0)
       ? row.cover
-      : this.createSvgCover(row.title || '劇本', `${row.genre || '本格'} · ${row.type || '硬核'}`, ['#1e293b', '#334155', '#0f172a'], '🎭');
+      : this.createSvgCover(row.title || '劇本', `${row.genre || '本格'} · ${types.join(' · ')}`, ['#1e293b', '#334155', '#0f172a'], '🎭');
 
     let characters = [];
     if (Array.isArray(row.characters)) {
@@ -231,7 +251,8 @@ const LarpModule = {
       characterSetup: row.character_setup || '',
       duration: row.duration || '4 小時',
       genre: row.genre,
-      type: row.type,
+      type: types.join(' · '),
+      types: types,
       needsDm: !!row.needs_dm,
       difficulty: row.difficulty || '★★★☆☆',
       rating: parseFloat(row.rating) || 0,
@@ -250,6 +271,7 @@ const LarpModule = {
 
     const avg = this.calcAverageRating(script);
     const numericRating = avg === '?' ? 0 : (parseFloat(avg) || 0);
+    const types = this.getScriptTypes(script);
 
     return {
       id: script.id,
@@ -259,7 +281,7 @@ const LarpModule = {
       character_setup: script.characterSetup || '',
       duration: script.duration || '4 小時',
       genre: script.genre || '本格',
-      type: script.type || '硬核',
+      type: types.join('、'),
       needs_dm: !!script.needsDm,
       difficulty: script.difficulty || '★★★☆☆',
       rating: numericRating,
@@ -424,6 +446,7 @@ const LarpModule = {
     this._reviewDraft = null;
     if (view === 'create') {
       this.initTempCharacters(6);
+      this.state.tempScriptTypes = ['硬核'];
     }
     document.querySelector('.bottom-nav')?.classList.remove('translate-y-full', 'pointer-events-none');
     this.renderView();
@@ -579,21 +602,35 @@ const LarpModule = {
             `).join('')}
           </div>
 
-          <!-- Type Filters (類型) -->
+          <!-- Type / Style Multi-Select Filters (風格標籤 - 可複選) -->
           <div class="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-0.5">
-            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">類型:</span>
-            ${['all', '硬核', '情感', '還原', '歡樂', '陣營', '恐怖', '機制'].map(t => `
-              <button 
-                onclick="LarpModule.setFilterType('${t}')"
-                class="tap-scale shrink-0 px-2.5 py-1 rounded-xl text-[11px] font-bold transition ${
-                  this.state.filterType === t 
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30' 
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-800'
-                }"
-              >
-                ${t === 'all' ? '全部類型' : t}
-              </button>
-            `).join('')}
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">風格:</span>
+            <button 
+              onclick="LarpModule.toggleFilterType('all')"
+              class="tap-scale shrink-0 px-2.5 py-1 rounded-xl text-[11px] font-bold transition ${
+                (!this.state.filterTypes || this.state.filterTypes.length === 0)
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30' 
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-800'
+              }"
+            >
+              全部風格
+            </button>
+            ${this.AVAILABLE_TYPES.map(t => {
+              const isActive = Array.isArray(this.state.filterTypes) && this.state.filterTypes.includes(t);
+              return `
+                <button 
+                  onclick="LarpModule.toggleFilterType('${t}')"
+                  class="tap-scale shrink-0 px-2.5 py-1 rounded-xl text-[11px] font-bold transition flex items-center space-x-1 ${
+                    isActive 
+                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30' 
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-800'
+                  }"
+                >
+                  ${isActive ? '<span class="text-[9px]">✓</span>' : ''}
+                  <span>${t}</span>
+                </button>
+              `;
+            }).join('')}
           </div>
 
           <!-- Play Status Filters (遊玩狀態) -->
@@ -726,9 +763,11 @@ const LarpModule = {
               <span class="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-900/40 text-[10px] font-bold">
                 ${script.genre}
               </span>
-              <span class="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/40 text-[10px] font-bold">
-                ${script.type}
-              </span>
+              ${this.getScriptTypes(script).map(t => `
+                <span class="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/40 text-[10px] font-bold">
+                  ${t}
+                </span>
+              `).join('')}
               ${script.needsDm ? `
                 <span class="px-1.5 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 text-[10px] font-bold">
                   需DM
@@ -852,9 +891,16 @@ const LarpModule = {
                   <span class="text-slate-400 text-[10px] font-bold">配置:</span>
                   <span class="font-bold">${script.playerCount} 人 (${script.characterSetup || '男女不限'})</span>
                 </div>
-                <div class="flex items-center space-x-1.5">
+                <div class="flex items-center space-x-1.5 flex-wrap gap-1">
                   <span class="text-slate-400 text-[10px] font-bold">流派:</span>
-                  <span class="font-bold text-emerald-600 dark:text-emerald-400">${script.genre} · ${script.type}</span>
+                  <span class="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] border border-emerald-200/50 dark:border-emerald-900/40">
+                    ${script.genre}
+                  </span>
+                  ${this.getScriptTypes(script).map(t => `
+                    <span class="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 font-bold text-[10px] border border-indigo-200/50 dark:border-indigo-900/40">
+                      ${t}
+                    </span>
+                  `).join('')}
                 </div>
                 <div class="flex items-center space-x-1.5">
                   <span class="text-slate-400 text-[10px] font-bold">時長:</span>
@@ -1288,27 +1334,14 @@ const LarpModule = {
             </div>
           </div>
 
-          <!-- Genre, Type & Player Count -->
-          <div class="grid grid-cols-3 gap-2">
+          <!-- Genre & Player Count -->
+          <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">流派</label>
               <select id="new-script-genre" class="w-full px-2 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none">
                 <option value="本格">本格</option>
                 <option value="變格">變格</option>
                 <option value="新本格">新本格</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">類型</label>
-              <select id="new-script-type" class="w-full px-2 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none">
-                <option value="硬核">硬核</option>
-                <option value="情感">情感</option>
-                <option value="還原">還原</option>
-                <option value="歡樂">歡樂</option>
-                <option value="陣營">陣營</option>
-                <option value="恐怖">恐怖</option>
-                <option value="機制">機制</option>
               </select>
             </div>
 
@@ -1323,6 +1356,21 @@ const LarpModule = {
                 oninput="LarpModule.handlePlayerCountChange(this.value)"
                 class="w-full px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none"
               >
+            </div>
+          </div>
+
+          <!-- Style / Types Multi-Select (風格標籤 - 可複選) -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="block text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                劇本風格 (可複選) *
+              </label>
+              <span id="script-types-count-badge" class="text-[10px] font-bold text-indigo-500 dark:text-indigo-400">
+                已選 ${(this.state.tempScriptTypes || []).length} 個風格
+              </span>
+            </div>
+            <div id="create-script-types-container" class="flex flex-wrap gap-1.5 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/60">
+              ${this.renderTypeCheckChips()}
             </div>
           </div>
 
@@ -1453,7 +1501,24 @@ const LarpModule = {
   },
 
   setFilterType(type) {
-    this.state.filterType = type;
+    this.toggleFilterType(type);
+  },
+
+  toggleFilterType(type) {
+    if (type === 'all') {
+      this.state.filterTypes = [];
+      this.renderView();
+      return;
+    }
+    if (!Array.isArray(this.state.filterTypes)) {
+      this.state.filterTypes = [];
+    }
+    const idx = this.state.filterTypes.indexOf(type);
+    if (idx >= 0) {
+      this.state.filterTypes.splice(idx, 1);
+    } else {
+      this.state.filterTypes.push(type);
+    }
     this.renderView();
   },
 
@@ -1475,7 +1540,7 @@ const LarpModule = {
   resetFilters() {
     this.state.searchQuery = '';
     this.state.filterGenre = 'all';
-    this.state.filterType = 'all';
+    this.state.filterTypes = [];
     this.state.filterStatus = 'all';
     this.state.filterPlayers = 'all';
     this.state.sortBy = 'rating';
@@ -1490,7 +1555,7 @@ const LarpModule = {
           const q = this.state.searchQuery.toLowerCase();
           const matchTitle = (s.title || '').toLowerCase().includes(q);
           const matchGenre = (s.genre || '').toLowerCase().includes(q);
-          const matchType = (s.type || '').toLowerCase().includes(q);
+          const matchType = (s.type || '').toLowerCase().includes(q) || this.getScriptTypes(s).some(t => t.toLowerCase().includes(q));
           const matchSummary = (s.summary || '').toLowerCase().includes(q);
           if (!matchTitle && !matchGenre && !matchType && !matchSummary) return false;
         }
@@ -1500,9 +1565,11 @@ const LarpModule = {
           return false;
         }
 
-        // Type filter
-        if (this.state.filterType !== 'all' && s.type !== this.state.filterType) {
-          return false;
+        // Style / Types filter (matches if script has ANY of the selected filter types)
+        if (Array.isArray(this.state.filterTypes) && this.state.filterTypes.length > 0) {
+          const scriptTypes = this.getScriptTypes(s);
+          const hasMatch = this.state.filterTypes.some(ft => scriptTypes.includes(ft));
+          if (!hasMatch) return false;
         }
 
         // Play status filter
@@ -1875,6 +1942,57 @@ const LarpModule = {
     this.updateCoverPreviewDOM();
   },
 
+  renderTypeCheckChips() {
+    const selected = Array.isArray(this.state.tempScriptTypes) ? this.state.tempScriptTypes : ['硬核'];
+    return this.AVAILABLE_TYPES.map(t => {
+      const isChecked = selected.includes(t);
+      return `
+        <button 
+          type="button"
+          onclick="LarpModule.toggleTempType('${t}')"
+          class="tap-scale px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
+            isChecked 
+              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30' 
+              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+          }"
+        >
+          <span>${isChecked ? '✓' : '+'}</span>
+          <span>${t}</span>
+        </button>
+      `;
+    }).join('');
+  },
+
+  toggleTempType(t) {
+    if (!Array.isArray(this.state.tempScriptTypes)) {
+      this.state.tempScriptTypes = [];
+    }
+    const idx = this.state.tempScriptTypes.indexOf(t);
+    if (idx >= 0) {
+      if (this.state.tempScriptTypes.length > 1) {
+        this.state.tempScriptTypes.splice(idx, 1);
+      } else {
+        App.showToast('至少需選取一種風格標籤', 'warning');
+        return;
+      }
+    } else {
+      this.state.tempScriptTypes.push(t);
+    }
+    this.updateTypesChipsDOM();
+  },
+
+  updateTypesChipsDOM() {
+    const container = document.getElementById('create-script-types-container');
+    if (container) {
+      container.innerHTML = this.renderTypeCheckChips();
+    }
+    const badge = document.getElementById('script-types-count-badge');
+    if (badge) {
+      const count = (this.state.tempScriptTypes || []).length;
+      badge.textContent = `已選 ${count} 個風格`;
+    }
+  },
+
   async submitCreateScript() {
     if (!this.isAdmin()) {
       App.showToast('權限不足，僅限管理員新增劇本', 'error');
@@ -1888,7 +2006,10 @@ const LarpModule = {
     }
 
     const genre = document.getElementById('new-script-genre')?.value || '本格';
-    const type = document.getElementById('new-script-type')?.value || '硬核';
+    const selectedTypes = (Array.isArray(this.state.tempScriptTypes) && this.state.tempScriptTypes.length > 0)
+      ? [...this.state.tempScriptTypes]
+      : ['硬核'];
+    const type = selectedTypes.join(' · ');
     const players = parseInt(document.getElementById('new-script-players')?.value, 10) || 6;
     const setup = (document.getElementById('new-script-setup')?.value || '').trim() || `${Math.ceil(players/2)}男${Math.floor(players/2)}女`;
     const duration = (document.getElementById('new-script-duration')?.value || '').trim() || '4 小時';
@@ -1912,6 +2033,7 @@ const LarpModule = {
       duration,
       genre,
       type,
+      types: selectedTypes,
       needsDm,
       rating: 0,
       playedDate: '',
@@ -1937,6 +2059,7 @@ const LarpModule = {
       this.saveScripts();
       this.state.tempScriptCover = null;
       this.state.tempCharacters = [];
+      this.state.tempScriptTypes = ['硬核'];
       this.state.syncStatus = 'synced';
       this.switchView('detail', newScript.id);
       App.showToast(`✅ 已成功建立劇本《${title}》！`, 'success');
@@ -2038,7 +2161,8 @@ const LarpModule = {
     const avg = this.calcAverageRating(script);
     const ratingDisplay = avg === '?' ? '尚未評分' : `${avg} ★`;
     const statusDisplay = this.isPlayed(script) ? '已遊玩' : '未遊玩';
-    const text = `【劇本殺推薦】《${script.title}》[${statusDisplay}]\n人數：${script.playerCount}人 (${script.characterSetup || '男女不限'})\n類型：${script.genre} · ${script.type}\n評分：${ratingDisplay}\n簡介：${(script.summary || '').slice(0, 60)}...`;
+    const typesStr = this.getScriptTypes(script).join(' · ');
+    const text = `【劇本殺推薦】《${script.title}》[${statusDisplay}]\n人數：${script.playerCount}人 (${script.characterSetup || '男女不限'})\n類型：${script.genre} · ${typesStr}\n評分：${ratingDisplay}\n簡介：${(script.summary || '').slice(0, 60)}...`;
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
