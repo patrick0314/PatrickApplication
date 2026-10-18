@@ -101,6 +101,16 @@ const LarpModule = {
     }
   },
 
+  editScript(scriptId) {
+    if (this.isAdmin()) {
+      this.switchView('edit', scriptId);
+    } else {
+      this.verifyAdminOrPrompt(() => {
+        this.switchView('edit', scriptId);
+      });
+    }
+  },
+
   AVAILABLE_TYPES: ['硬核', '情感', '還原', '歡樂', '陣營', '恐怖', '機制', '微恐', '立意', '沉浸'],
   DEMO_SCRIPT_IDS: ['script-1', 'script-2', 'script-3', 'script-4', 'larp-001', 'larp-002', 'larp-003', 'larp-004'],
 
@@ -450,6 +460,22 @@ const LarpModule = {
     if (view === 'create') {
       this.initTempCharacters(6);
       this.state.tempScriptTypes = ['硬核'];
+      this.state.tempScriptCover = null;
+    } else if (view === 'edit') {
+      const targetId = scriptId || this.state.selectedScriptId;
+      const script = this.state.scripts.find(s => s.id === targetId);
+      if (script) {
+        this.state.tempScriptCover = script.cover || null;
+        this.state.tempScriptTypes = [...this.getScriptTypes(script)];
+        if (Array.isArray(script.characters) && script.characters.length > 0) {
+          this.state.tempCharacters = script.characters.map(c => ({
+            name: c.name || '',
+            desc: c.desc || ''
+          }));
+        } else {
+          this.initTempCharacters(script.playerCount || 6);
+        }
+      }
     }
     document.querySelector('.bottom-nav')?.classList.remove('translate-y-full', 'pointer-events-none');
     this.renderView();
@@ -482,6 +508,9 @@ const LarpModule = {
     }
     if (this.state.currentView === 'create') {
       return this.renderCreateScriptView();
+    }
+    if (this.state.currentView === 'edit') {
+      return this.renderEditScriptView();
     }
     return this.renderListView();
   },
@@ -757,6 +786,13 @@ const LarpModule = {
                 </span>
                 ${this.isAdmin() ? `
                   <button 
+                    onclick="event.stopPropagation(); LarpModule.editScript('${script.id}')"
+                    class="tap-scale p-1 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition"
+                    title="管理員：編輯此劇本"
+                  >
+                    <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                  </button>
+                  <button 
                     onclick="event.stopPropagation(); LarpModule.deleteScript('${script.id}')"
                     class="tap-scale p-1 -mr-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
                     title="管理員：刪除此劇本"
@@ -847,6 +883,14 @@ const LarpModule = {
 
             ${this.isAdmin() ? `
               <button 
+                onclick="LarpModule.editScript('${script.id}')" 
+                class="tap-scale p-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/40" 
+                title="管理員：編輯此劇本"
+              >
+                <i data-lucide="edit-3" class="w-4 h-4"></i>
+              </button>
+
+              <button 
                 onclick="LarpModule.deleteScript('${script.id}')" 
                 class="tap-scale p-1.5 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200/50 dark:border-red-900/40" 
                 title="管理員：刪除此劇本"
@@ -885,7 +929,18 @@ const LarpModule = {
             <!-- Core Specs -->
             <div class="flex-1 space-y-2 min-w-0">
               <div>
-                <h2 class="text-lg font-black text-slate-900 dark:text-white leading-tight">${script.title}</h2>
+                <div class="flex items-center justify-between">
+                  <h2 class="text-lg font-black text-slate-900 dark:text-white leading-tight truncate">${script.title}</h2>
+                  ${this.isAdmin() ? `
+                    <button 
+                      onclick="LarpModule.editScript('${script.id}')" 
+                      class="tap-scale shrink-0 p-1 rounded-lg text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition" 
+                      title="管理員：編輯劇本內容"
+                    >
+                      <i data-lucide="edit-3" class="w-4 h-4"></i>
+                    </button>
+                  ` : ''}
+                </div>
                 <div class="flex items-center space-x-1.5 mt-1">
                   ${this.isPlayed(script) ? `
                     <span class="px-2 py-0.5 rounded-md bg-amber-500 text-white font-black text-[10px] shadow-sm shadow-amber-500/20">
@@ -1481,6 +1536,232 @@ const LarpModule = {
     `;
   },
 
+  // View 4: Edit Script View (Admin only)
+  renderEditScriptView() {
+    const script = this.state.scripts.find(s => s.id === this.state.selectedScriptId);
+    if (!script) {
+      return `
+        <div class="text-center py-12 space-y-3">
+          <p class="text-xs text-slate-400">找不到此劇本資料</p>
+          <button onclick="LarpModule.switchView('list')" class="text-xs font-bold text-emerald-500 underline">返回列表</button>
+        </div>
+      `;
+    }
+
+    if (!this.isAdmin()) {
+      return `
+        <div class="text-center py-12 space-y-3">
+          <p class="text-xs text-rose-500 font-bold">權限不足：僅限管理員編輯劇本</p>
+          <button onclick="LarpModule.verifyAdminOrPrompt(() => LarpModule.renderView())" class="text-xs font-bold text-indigo-500 underline">點擊輸入管理金鑰</button>
+        </div>
+      `;
+    }
+
+    const charsCount = this.state.tempCharacters ? this.state.tempCharacters.length : (script.playerCount || 6);
+
+    return `
+      <div class="space-y-4 pb-28">
+        <!-- Top Navigation -->
+        <div class="flex items-center justify-between pt-1">
+          <button onclick="LarpModule.switchView('detail', '${script.id}')" class="flex items-center space-x-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 tap-scale">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            <span>返回劇本詳情</span>
+          </button>
+          <span class="text-xs font-black text-slate-700 dark:text-slate-300">
+            編輯劇本內容
+          </span>
+        </div>
+
+        <!-- Form Card -->
+        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+          <!-- Title -->
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">劇本名稱 *</label>
+            <input 
+              type="text" 
+              id="edit-script-title" 
+              value="${this.escapeHtml(script.title)}"
+              placeholder="例如：死者在幻夜中醒來"
+              class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            >
+          </div>
+
+          <!-- Cover Image Upload -->
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">劇本海報封面</label>
+              <span class="text-[9px] text-slate-400">可更換海報或保留原圖</span>
+            </div>
+
+            <div class="flex items-center space-x-3">
+              <label class="w-20 h-28 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-indigo-500 flex flex-col items-center justify-center text-slate-400 cursor-pointer shrink-0 tap-scale bg-slate-50/50 dark:bg-slate-800/50">
+                <i data-lucide="image-plus" class="w-6 h-6"></i>
+                <span class="text-[9px] font-bold mt-1">更換封面</span>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  class="hidden" 
+                  onchange="LarpModule.handleScriptCoverSelect(this)"
+                >
+              </label>
+
+              <div id="script-cover-preview-box" class="flex-1">
+                ${this.state.tempScriptCover ? `
+                  <div class="relative w-20 h-28 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-md">
+                    <img src="${this.state.tempScriptCover}" alt="封面預覽" class="w-full h-full object-cover">
+                    <button 
+                      type="button" 
+                      onclick="LarpModule.clearTempCover()" 
+                      class="absolute top-1 right-1 p-0.5 rounded-full bg-red-500 text-white shadow-sm tap-scale"
+                    >
+                      <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                  </div>
+                ` : `
+                  <div class="text-[11px] text-slate-400 leading-relaxed">
+                    若移除封面，系統將自動生成高質感幾何向量預設封面。
+                  </div>
+                `}
+              </div>
+            </div>
+          </div>
+
+          <!-- Genre & Player Count -->
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">流派</label>
+              <select id="edit-script-genre" class="w-full px-2 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none">
+                <option value="本格" ${script.genre === '本格' ? 'selected' : ''}>本格</option>
+                <option value="變格" ${script.genre === '變格' ? 'selected' : ''}>變格</option>
+                <option value="新本格" ${script.genre === '新本格' ? 'selected' : ''}>新本格</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">總人數</label>
+              <input 
+                type="number" 
+                id="edit-script-players" 
+                min="1" 
+                max="20" 
+                value="${script.playerCount || charsCount}"
+                oninput="LarpModule.handlePlayerCountChange(this.value)"
+                class="w-full px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none"
+              >
+            </div>
+          </div>
+
+          <!-- Style / Types Multi-Select (風格標籤 - 可複選) -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="block text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                劇本風格 (可複選) *
+              </label>
+              <span id="script-types-count-badge" class="text-[10px] font-bold text-indigo-500 dark:text-indigo-400">
+                已選 ${(this.state.tempScriptTypes || []).length} 個風格
+              </span>
+            </div>
+            <div id="create-script-types-container" class="flex flex-wrap gap-1.5 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/60">
+              ${this.renderTypeCheckChips()}
+            </div>
+          </div>
+
+          <!-- Details: Character Setup, Duration, DM -->
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">角色男女配比</label>
+              <input 
+                type="text" 
+                id="edit-script-setup" 
+                placeholder="3男3女" 
+                value="${this.escapeHtml(script.characterSetup || '')}"
+                class="w-full px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white focus:outline-none"
+              >
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">遊玩時長</label>
+              <input 
+                type="text" 
+                id="edit-script-duration" 
+                placeholder="4 小時" 
+                value="${this.escapeHtml(script.duration || '')}"
+                class="w-full px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white focus:outline-none"
+              >
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">主持需求</label>
+              <select id="edit-script-dm" class="w-full px-2 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none">
+                <option value="true" ${script.needsDm ? 'selected' : ''}>需主持人</option>
+                <option value="false" ${!script.needsDm ? 'selected' : ''}>免主持人</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 官方劇本介紹 (居中書寫) -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="block text-[10px] font-bold text-amber-500 dark:text-amber-400 uppercase tracking-wider">
+                官方劇本介紹 (居中書寫) *
+              </label>
+              <span class="text-[9px] text-slate-400">文字居中顯示</span>
+            </div>
+            <textarea 
+              id="edit-script-summary" 
+              rows="5" 
+              placeholder="填寫劇本官方故事大綱與背景介紹..."
+              class="w-full px-3 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white text-center focus:outline-none focus:ring-2 focus:ring-amber-500 leading-relaxed tracking-wide"
+            >${this.escapeHtml(script.summary || '')}</textarea>
+          </div>
+
+          <!-- 角色介紹 (動態新增與編輯) -->
+          <div class="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div class="flex items-center justify-between">
+              <div>
+                <label id="create-script-chars-title" class="block text-[10px] font-bold text-amber-500 dark:text-amber-400 uppercase tracking-wider">
+                  角色介紹 (${charsCount} 位角色)
+                </label>
+                <p class="text-[10px] text-slate-400">可自由增刪角色或修改角色簡介</p>
+              </div>
+              <button 
+                type="button" 
+                onclick="LarpModule.addTempCharacterSlot()"
+                class="tap-scale px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-900/40 text-[11px] font-bold flex items-center space-x-1"
+              >
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span>新增角色</span>
+              </button>
+            </div>
+
+            <div id="create-script-characters-list" class="space-y-2.5">
+              ${this.renderTempCharactersList()}
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="pt-2 flex items-center space-x-2">
+            <button 
+              type="button"
+              onclick="LarpModule.switchView('detail', '${script.id}')"
+              class="tap-scale w-1/3 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs text-center"
+            >
+              取消
+            </button>
+            <button 
+              type="button"
+              onclick="LarpModule.submitEditScript('${script.id}')" 
+              class="tap-scale flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-black text-sm shadow-xl shadow-indigo-600/30 flex items-center justify-center space-x-2 transition"
+            >
+              <i data-lucide="check" class="w-5 h-5"></i>
+              <span>儲存修改</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
   // Lightbox Modal for Photo Zooming
   renderLightbox() {
     if (!this.state.lightboxImage) return '';
@@ -1841,7 +2122,7 @@ const LarpModule = {
     if (!this.state.tempCharacters) this.state.tempCharacters = [];
     this.state.tempCharacters.push({ name: '', desc: '' });
     const count = this.state.tempCharacters.length;
-    const playersInput = document.getElementById('new-script-players');
+    const playersInput = document.getElementById('new-script-players') || document.getElementById('edit-script-players');
     if (playersInput) playersInput.value = count;
     this.renderTempCharactersDOM();
   },
@@ -1853,7 +2134,7 @@ const LarpModule = {
     }
     this.state.tempCharacters.splice(idx, 1);
     const count = this.state.tempCharacters.length;
-    const playersInput = document.getElementById('new-script-players');
+    const playersInput = document.getElementById('new-script-players') || document.getElementById('edit-script-players');
     if (playersInput) playersInput.value = count;
     this.renderTempCharactersDOM();
   },
@@ -2085,6 +2366,98 @@ const LarpModule = {
     } catch (err) {
       console.warn('[LARP Sync] Failed to sync new script to Supabase:', err);
       App.showToast(`建立失敗：${err.message || '雲端連線異常，請稍後再試'}`, 'error');
+    }
+  },
+
+  async submitEditScript(scriptId) {
+    if (!this.isAdmin()) {
+      App.showToast('權限不足，僅限管理員編輯劇本', 'error');
+      return;
+    }
+
+    const script = this.state.scripts.find(s => s.id === scriptId);
+    if (!script) {
+      App.showToast('找不到此劇本資料', 'error');
+      return;
+    }
+
+    const title = (document.getElementById('edit-script-title')?.value || '').trim();
+    if (!title) {
+      App.showToast('請填寫劇本名稱', 'warning');
+      return;
+    }
+
+    const genre = document.getElementById('edit-script-genre')?.value || '本格';
+    const selectedTypes = (Array.isArray(this.state.tempScriptTypes) && this.state.tempScriptTypes.length > 0)
+      ? [...this.state.tempScriptTypes]
+      : ['硬核'];
+    const type = selectedTypes.join(' · ');
+    const players = parseInt(document.getElementById('edit-script-players')?.value, 10) || 6;
+    const setup = (document.getElementById('edit-script-setup')?.value || '').trim() || `${Math.ceil(players/2)}男${Math.floor(players/2)}女`;
+    const duration = (document.getElementById('edit-script-duration')?.value || '').trim() || '4 小時';
+    const needsDm = document.getElementById('edit-script-dm')?.value === 'true';
+    const summary = (document.getElementById('edit-script-summary')?.value || '').trim() || '暫無劇本介紹。';
+
+    // Collect characters
+    const characters = (this.state.tempCharacters || [])
+      .map(c => ({ name: (c.name || '').trim(), desc: (c.desc || '').trim() }))
+      .filter(c => c.name || c.desc);
+
+    // Cover: use temp cover if user picked/cleared one, else existing cover, else fallback SVG
+    const cover = (this.state.tempScriptCover !== undefined && this.state.tempScriptCover !== null)
+      ? this.state.tempScriptCover
+      : (script.cover || this.createSvgCover(title, `${genre} · ${type}`, ['#1e1b4b', '#312e81', '#047857'], '🎭'));
+
+    const updatedRow = {
+      title,
+      cover,
+      player_count: players,
+      character_setup: setup,
+      duration,
+      genre,
+      type: selectedTypes.join('、'),
+      needs_dm: needsDm,
+      summary,
+      owner_review: (characters && characters.length > 0) ? { characters } : null
+    };
+
+    try {
+      await App.showProgressBar({
+        title: '正在更新劇本...',
+        subtitle: `正在將劇本《${title}》修改內容同步至雲端資料庫`,
+        durationMs: 5000,
+        task: async () => {
+          await this.supabaseRequest(`/scripts?id=eq.${encodeURIComponent(script.id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify(updatedRow)
+          });
+        }
+      });
+
+      // Update in-memory script object (All existing reviews are 100% kept intact!)
+      script.title = title;
+      script.cover = cover;
+      script.playerCount = players;
+      script.characterSetup = setup;
+      script.duration = duration;
+      script.genre = genre;
+      script.type = type;
+      script.types = selectedTypes;
+      script.needsDm = needsDm;
+      script.summary = summary;
+      script.characters = characters;
+
+      this.saveScripts();
+      this.state.tempScriptCover = null;
+      this.state.tempCharacters = [];
+      this.state.tempScriptTypes = ['硬核'];
+      this.state.syncStatus = 'synced';
+      this.switchView('detail', script.id);
+      App.showToast(`✅ 已成功更新劇本《${title}》！`, 'success');
+      if ('vibrate' in navigator) navigator.vibrate(30);
+    } catch (err) {
+      console.warn('[LARP Sync] Failed to update script in Supabase:', err);
+      App.showToast(`更新失敗：${err.message || '雲端連線異常，請稍後再試'}`, 'error');
     }
   },
 
