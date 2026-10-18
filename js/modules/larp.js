@@ -158,187 +158,21 @@ const LarpModule = {
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
   },
 
-  // Get Default Seed / Demo Scripts
+  // Get Default Seed / Demo Scripts (Empty: No built-in or demo scripts)
   getDefaultScripts() {
-    return [
-      {
-        id: 'script-1',
-        title: '年輪',
-        cover: this.createSvgCover('年輪', '經典本格 · 推理天花板', ['#0f172a', '#1e293b', '#0284c7'], '🌲'),
-        playerCount: 5,
-        characterSetup: '3男 2女（可反串）',
-        duration: '4.5 ~ 5.5 小時',
-        genre: '本格',
-        type: '硬核',
-        needsDm: true,
-        difficulty: '★★★★★',
-        rating: 4.9,
-        playedDate: '2024-02-18',
-        summary: '幾百年前的大火，荒廢已久的袁家大宅\n五名各懷心事的男女因一封神祕邀請函聚首\n大雪封山，五芒星陣中出現了離奇的焦黑屍體\n時間與空間交錯，究竟誰是縱火者？誰又是受害者？',
-        characters: [
-          { name: '常思平', desc: '沉穩內斂的訪客，似乎對袁家老宅有所了解' },
-          { name: '江成', desc: '目光敏銳的青年，帶著不為人知的過去赴約' },
-          { name: '姚月華', desc: '氣質清冷的女子，眉宇間藏著深沉的心事' },
-          { name: '袁明', desc: '與袁家淵源頗深的後人，神情忐忑不安' },
-          { name: '林小婉', desc: '受邀前來的年輕女孩，對周遭一切充滿戒備' }
-        ],
-        reviews: [
-          {
-            id: 'rev-101',
-            userName: '阿倫',
-            playedDate: '2024-02-18',
-            character: '江成',
-            rating: 5,
-            content: '盤到半夜兩點腦袋快燒乾，但真的是神作！DM 的扶車時機抓得很好，最後復盤大家拍手叫好！',
-            photos: [],
-            isSpoiler: false,
-            createdAt: '2024-02-19T10:30:00Z'
-          },
-          {
-            id: 'rev-102',
-            userName: '欣怡',
-            playedDate: '2024-02-18',
-            character: '姚月華',
-            rating: 4.8,
-            content: '故事真相揭曉時真的太震撼了，人物之間的宿命感讓人唏噓，雖然是硬核本但也帶有一絲哀傷。',
-            photos: [],
-            isSpoiler: false,
-            createdAt: '2024-02-19T14:10:00Z'
-          }
-        ]
-      },
-      {
-        id: 'script-2',
-        title: '告別詩',
-        cover: this.createSvgCover('告別詩', '青春遺憾 · 情感天花板', ['#4c0519', '#881337', '#e11d48'], '🌸'),
-        playerCount: 6,
-        characterSetup: '3男 3女（不建議反串）',
-        duration: '4.5 ~ 5 小時',
-        genre: '新本格',
-        type: '情感',
-        needsDm: true,
-        difficulty: '★★★☆☆',
-        rating: 4.8,
-        playedDate: '2024-03-08',
-        summary: '十七歲那年的盛夏，教室天花板旋轉的風扇\n操場邊的落櫻，以及沒能說出口的告白\n多年後重逢在致遠中學校園，那些斑駁的青春記憶\n伴隨著一首寫滿遺憾的告別詩重新翻開...',
-        characters: [
-          { name: '陸澤遠', desc: '致遠中學的風雲人物，眼神裡總帶著倔強與溫柔' },
-          { name: '蘇晴晴', desc: '笑容燦爛的女孩，是盛夏裡最耀眼的一抹陽光' },
-          { name: '余樂天', desc: '班上的開心果，總是用玩笑掩飾內心的細膩' },
-          { name: '楚雲歌', desc: '文靜內向的少女，課本裡夾著未曾寄出的信箋' },
-          { name: '顧言', desc: '成績優異的班長，默默守護著身邊重要的人' },
-          { name: '林星河', desc: '熱愛音樂的少年，吉他聲裡藏著青春的秘密' }
-        ],
-        reviews: [
-          {
-            id: 'rev-201',
-            userName: '小安',
-            playedDate: '2024-03-08',
-            character: '蘇晴晴',
-            rating: 5,
-            content: '哭到妝全花掉了... 陸澤遠那段獨白直接擊中淚點。如果時間能倒流，我們是不是就不會走散了？',
-            photos: [],
-            isSpoiler: false,
-            createdAt: '2024-03-09T09:20:00Z'
-          },
-          {
-            id: 'rev-202',
-            userName: 'Kev',
-            playedDate: '2024-03-08',
-            character: '余樂天',
-            rating: 4.5,
-            content: '歡樂前半段，後半段大反轉刀到不行。情感鋪陳非常自然，非常推薦給想要沉浸情感的玩家！',
-            photos: [],
-            isSpoiler: false,
-            createdAt: '2024-03-09T18:00:00Z'
-          }
-        ]
-      },
-      {
-        id: 'script-3',
-        title: '木夕僧之戲',
-        cover: this.createSvgCover('木夕僧之戲', '日式民俗 · 暴風雪山莊', ['#1e1b4b', '#312e81', '#4338ca'], '🏮'),
-        playerCount: 6,
-        characterSetup: '4男 2女',
-        duration: '4 ~ 4.5 小時',
-        genre: '變格',
-        type: '還原',
-        needsDm: true,
-        difficulty: '★★★★☆',
-        rating: 4.6,
-        playedDate: '2024-01-20',
-        summary: '深山古寺木夕寺，每逢祭典之夜必有僧人戴著般若面具現身\n暴風雪之夜，六位香客受困於寺院深處\n恐怖的民俗傳說化為現實\n寺內的鐘聲每響一聲，便有一人離奇殞命...',
-        characters: [
-          { name: '藤原一郎', desc: '博學的民俗學者，專程前往古寺調查傳說' },
-          { name: '空海', desc: '木夕寺的年輕修行僧，神色總是欲言又止' },
-          { name: '高橋美咲', desc: '前來參拜的神秘女子，似乎在尋找失蹤的親人' },
-          { name: '佐藤健太', desc: '迷路誤入寺院的旅人，對古寺的怪事感到不安' },
-          { name: '源義行', desc: '沉默寡言的武道家，隨身帶著一把古舊長刀' },
-          { name: '神樂千鶴', desc: '通曉古禮的巫女後裔，能感知寺院中的異樣氣息' }
-        ],
-        reviews: [
-          {
-            id: 'rev-301',
-            userName: '威廉',
-            playedDate: '2024-01-20',
-            character: '空海',
-            rating: 4.5,
-            content: '日式氛圍滿分！推理環節比想像中嚴密，最後的還原反轉相當出人意料。',
-            photos: [],
-            isSpoiler: false,
-            createdAt: '2024-01-21T11:00:00Z'
-          }
-        ]
-      },
-      {
-        id: 'script-4',
-        title: '青樓',
-        cover: this.createSvgCover('青樓', '古風陣營 · 爆笑撕逼機制', ['#450a0a', '#7f1d1d', '#b91c1c'], '🪭'),
-        playerCount: 7,
-        characterSetup: '4男 3女（歡樂反串佳）',
-        duration: '4 ~ 4.5 小時',
-        genre: '本格',
-        type: '歡樂',
-        needsDm: true,
-        difficulty: '★★☆☆☆',
-        rating: 4.5,
-        playedDate: '2024-04-12',
-        summary: '長安城第一花樓「春風閣」，一年一度的花魁大賽今夜舉行！\n各路達官顯貴、紈絝子弟、神秘豪客紛紛捧場\n拍賣喊價、偷雞摸狗、暗通款曲，究竟誰能拔得頭籌？\n今夜注定笑鬧不斷！',
-        characters: [
-          { name: '司徒少爺', desc: '揮金如土的京城紈絝，今晚勢必包下全場' },
-          { name: '玉嬌娘', desc: '春風閣當紅頭牌，一笑傾城卻心思玲瓏' },
-          { name: '柳如煙', desc: '琴棋書畫樣樣精通的清倌人，身世成謎' },
-          { name: '沈萬金', desc: '富甲一方的江南巨賈，算盤打得比誰都精' },
-          { name: '冷無情', desc: '佩劍入閣的冷面俠客，看似與風月場所格格不入' },
-          { name: '牡丹仙子', desc: '舞姿曼妙的異域佳人，眼波流轉間暗藏玄機' },
-          { name: '趙公子', desc: '風流倜儻的才子，吟詩作對卻口袋空空' }
-        ],
-        reviews: [
-          {
-            id: 'rev-401',
-            userName: '小夏',
-            playedDate: '2024-04-12',
-            character: '玉嬌娘',
-            rating: 5,
-            content: '反串演少爺笑翻全場！道具跟拍賣機制太有趣了，大家為了搶花魁根本不顧兄弟情義哈哈！',
-            photos: [],
-            isSpoiler: false,
-            createdAt: '2024-04-13T02:15:00Z'
-          }
-        ]
-      }
-    ];
+    return [];
   },
 
   // Load from local storage or initialize with defaults
   loadScripts() {
-    const saved = StorageManager.get(this.STORAGE_KEY, null);
+    const saved = StorageManager.get(this.STORAGE_KEY, []);
     if (saved && Array.isArray(saved)) {
-      this.state.scripts = saved;
+      // Filter out any legacy built-in/demo script IDs
+      this.state.scripts = saved.filter(s => s && s.id && !['script-1', 'script-2', 'script-3', 'script-4', 'larp-001', 'larp-002', 'larp-003', 'larp-004'].includes(s.id));
     } else {
-      this.state.scripts = this.getDefaultScripts();
-      this.saveScripts();
+      this.state.scripts = [];
     }
+    this.saveScripts();
   },
 
   // Save to local storage
@@ -488,24 +322,11 @@ const LarpModule = {
         this.supabaseRequest('/reviews?select=*&order=created_at.desc')
       ]);
 
-      // 2. If remote database is completely empty (first run), check if ever initialized
+      // 2. Process remote scripts & reviews directly (no demo scripts seeded)
       if (!remoteScripts || remoteScripts.length === 0) {
-        const hasInitialized = StorageManager.get('larp_has_initialized', false);
-        if (!hasInitialized) {
-          console.log('[LARP Sync] Supabase database is empty. Auto-seeding defaults...');
-          await this.seedSupabaseDefaults();
-          StorageManager.set('larp_has_initialized', true);
-          const [seededScripts, seededReviews] = await Promise.all([
-            this.supabaseRequest('/scripts?select=*&order=created_at.desc'),
-            this.supabaseRequest('/reviews?select=*&order=created_at.desc')
-          ]);
-          this.processRemoteData(seededScripts, seededReviews);
-        } else {
-          this.state.scripts = [];
-          this.saveScripts();
-        }
+        this.state.scripts = [];
+        this.saveScripts();
       } else {
-        StorageManager.set('larp_has_initialized', true);
         this.processRemoteData(remoteScripts, remoteReviews);
       }
 
@@ -544,31 +365,7 @@ const LarpModule = {
   },
 
   async seedSupabaseDefaults() {
-    const defaults = this.getDefaultScripts();
-    const scriptRows = defaults.map(s => this.mapScriptToRow(s));
-
-    // Batch insert scripts
-    await this.supabaseRequest('/scripts', {
-      method: 'POST',
-      body: JSON.stringify(scriptRows)
-    });
-
-    // Batch insert default reviews
-    const reviewRows = [];
-    defaults.forEach(s => {
-      if (s.reviews && s.reviews.length > 0) {
-        s.reviews.forEach(r => {
-          reviewRows.push(this.mapReviewToRow(r, s.id));
-        });
-      }
-    });
-
-    if (reviewRows.length > 0) {
-      await this.supabaseRequest('/reviews', {
-        method: 'POST',
-        body: JSON.stringify(reviewRows)
-      });
-    }
+    return;
   },
 
   // Client-side image compression using HTML5 Canvas (Crucial for mobile and storage!)
@@ -2256,35 +2053,15 @@ const LarpModule = {
 
   resetToDemoData() {
     App.confirm({
-      title: '確定要重置劇本資料嗎？',
-      message: '這將會還原為預設的經典劇本與示範評價，您自訂的新增項目將會被重置。',
-      confirmText: '確定還原',
+      title: '確定要重新整理劇本資料嗎？',
+      message: '這將會自雲端資料庫重新抓取您已建立的所有真實劇本。',
+      confirmText: '確定重新整理',
       cancelText: '取消',
       onConfirm: async () => {
         try {
-          await App.showProgressBar({
-            title: '正在還原預設劇本...',
-            subtitle: '正在同步經典劇本與示範評價至資料庫',
-            durationMs: 5000,
-            task: async () => {
-              if (this.isAdmin()) {
-                await this.supabaseRequest('/scripts?id=neq.placeholder', {
-                  method: 'DELETE'
-                });
-                await this.seedSupabaseDefaults();
-              }
-            }
-          });
-
-          this.state.scripts = this.getDefaultScripts();
-          this.saveScripts();
-          this.state.selectedScriptId = null;
-          this.state.currentView = 'list';
-          this.renderView();
-          App.showToast('✅ 已成功還原為預設示範劇本資料！', 'success');
+          await this.syncWithSupabase(true);
         } catch (e) {
-          console.warn('[Supabase] Reset remote error:', e);
-          App.showToast('還原失敗：' + (e.message || '雲端連線異常'), 'error');
+          App.showToast('整理失敗：' + (e.message || '雲端連線異常'), 'error');
         }
       }
     });
