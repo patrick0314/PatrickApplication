@@ -105,6 +105,7 @@ const LarpModule = {
     currentView: 'list', // 'list' | 'detail' | 'create'
     selectedScriptId: null,
     searchQuery: '',
+    filterStatus: 'all', // 'all' | 'played' | 'unplayed'
     filterGenre: 'all',
     filterType: 'all',
     filterPlayers: 'all',
@@ -114,6 +115,7 @@ const LarpModule = {
     revealedSpoilers: new Set(),
     tempReviewPhotos: [],
     tempScriptCover: null,
+    tempCharacters: [],
     showAddReviewModal: false,
     syncStatus: 'idle', // 'idle' | 'syncing' | 'synced' | 'error'
     lastSyncedAt: null
@@ -127,6 +129,11 @@ const LarpModule = {
     this._initialized = true;
     this.loadScripts();
     this.syncWithSupabase();
+  },
+
+  // Helper to check if a script has been played (has at least 1 review/rating)
+  isPlayed(script) {
+    return Array.isArray(script?.reviews) && script.reviews.length > 0;
   },
 
   // Helper to generate SVG placeholder poster covers
@@ -167,13 +174,14 @@ const LarpModule = {
         difficulty: '★★★★★',
         rating: 4.9,
         playedDate: '2024-02-18',
-        summary: '幾百年前的大火，荒廢已久的袁家大宅。五名各懷心事的男女因一封神祕邀請函聚首。大雪封山，五芒星陣中出現了離奇的焦黑屍體...時間與空間交錯，究竟誰是縱火者？誰又是受害者？',
-        ownerReview: {
-          character: '常思平',
-          rating: 5.0,
-          content: '毫無疑問的硬核本格天花板！時間線密不透風，每一條線索都能完美閉環。核心詭計揭開的那一刻全身起雞皮疙瘩，非常考驗盤邏輯的耐心與大局觀。',
-          caution: '極度不建議新手直接開局，適合熱愛盤時間線與硬核還原的重度推理玩家。'
-        },
+        summary: '幾百年前的大火，荒廢已久的袁家大宅\n五名各懷心事的男女因一封神祕邀請函聚首\n大雪封山，五芒星陣中出現了離奇的焦黑屍體\n時間與空間交錯，究竟誰是縱火者？誰又是受害者？',
+        characters: [
+          { name: '常思平', desc: '沉穩內斂的訪客，似乎對袁家老宅有所了解' },
+          { name: '江成', desc: '目光敏銳的青年，帶著不為人知的過去赴約' },
+          { name: '姚月華', desc: '氣質清冷的女子，眉宇間藏著深沉的心事' },
+          { name: '袁明', desc: '與袁家淵源頗深的後人，神情忐忑不安' },
+          { name: '林小婉', desc: '受邀前來的年輕女孩，對周遭一切充滿戒備' }
+        ],
         reviews: [
           {
             id: 'rev-101',
@@ -212,13 +220,15 @@ const LarpModule = {
         difficulty: '★★★☆☆',
         rating: 4.8,
         playedDate: '2024-03-08',
-        summary: '十七歲那年的盛夏，教室天花板旋轉的風扇，操場邊的落櫻，以及沒能說出口的告白。多年後重逢在致遠中學校園，那些斑駁的青春記憶，伴隨著一首寫滿遺憾的告別詩重新翻開...',
-        ownerReview: {
-          character: '陸澤遠',
-          rating: 4.8,
-          content: '哭得不能自已！角色之間的羈絆描寫極為細膩，沒有刻意的狗血煽情，全都是青春裡最純粹、最真實的遺憾與溫暖。整車朋友哭掉兩包衛生紙。',
-          caution: '請找能沉浸、願意認真讀本的角色扮演型玩家，吃親情或青春校園線的必玩。'
-        },
+        summary: '十七歲那年的盛夏，教室天花板旋轉的風扇\n操場邊的落櫻，以及沒能說出口的告白\n多年後重逢在致遠中學校園，那些斑駁的青春記憶\n伴隨著一首寫滿遺憾的告別詩重新翻開...',
+        characters: [
+          { name: '陸澤遠', desc: '致遠中學的風雲人物，眼神裡總帶著倔強與溫柔' },
+          { name: '蘇晴晴', desc: '笑容燦爛的女孩，是盛夏裡最耀眼的一抹陽光' },
+          { name: '余樂天', desc: '班上的開心果，總是用玩笑掩飾內心的細膩' },
+          { name: '楚雲歌', desc: '文靜內向的少女，課本裡夾著未曾寄出的信箋' },
+          { name: '顧言', desc: '成績優異的班長，默默守護著身邊重要的人' },
+          { name: '林星河', desc: '熱愛音樂的少年，吉他聲裡藏著青春的秘密' }
+        ],
         reviews: [
           {
             id: 'rev-201',
@@ -257,13 +267,15 @@ const LarpModule = {
         difficulty: '★★★★☆',
         rating: 4.6,
         playedDate: '2024-01-20',
-        summary: '深山古寺木夕寺，每逢祭典之夜必有僧人戴著般若面具現身。暴風雪之夜，六位香客受困於寺院深處，恐怖的民俗傳說化為現實，寺內的鐘聲每響一聲，便有一人離奇殞命...',
-        ownerReview: {
-          character: '藤原一郎',
-          rating: 4.6,
-          content: '氣氛營造非常優秀！日式和風怪談的氛圍感十足，核詭設計精巧，變格世界觀下的邏輯自洽度相當高。',
-          caution: '稍微有一點微微恐與驚悚民俗氛圍，膽小玩家不用太擔心，主要是氛圍感而非實體搜證驚嚇。'
-        },
+        summary: '深山古寺木夕寺，每逢祭典之夜必有僧人戴著般若面具現身\n暴風雪之夜，六位香客受困於寺院深處\n恐怖的民俗傳說化為現實\n寺內的鐘聲每響一聲，便有一人離奇殞命...',
+        characters: [
+          { name: '藤原一郎', desc: '博學的民俗學者，專程前往古寺調查傳說' },
+          { name: '空海', desc: '木夕寺的年輕修行僧，神色總是欲言又止' },
+          { name: '高橋美咲', desc: '前來參拜的神秘女子，似乎在尋找失蹤的親人' },
+          { name: '佐藤健太', desc: '迷路誤入寺院的旅人，對古寺的怪事感到不安' },
+          { name: '源義行', desc: '沉默寡言的武道家，隨身帶著一把古舊長刀' },
+          { name: '神樂千鶴', desc: '通曉古禮的巫女後裔，能感知寺院中的異樣氣息' }
+        ],
         reviews: [
           {
             id: 'rev-301',
@@ -291,13 +303,16 @@ const LarpModule = {
         difficulty: '★★☆☆☆',
         rating: 4.5,
         playedDate: '2024-04-12',
-        summary: '長安城第一花樓「春風閣」，一年一度的花魁大賽今夜舉行！各路達官顯貴、紈絝子弟、神秘豪客紛紛捧場。拍賣喊價、偷雞摸狗、暗通款曲，究竟誰能拔得頭籌？今夜注定笑鬧不斷！',
-        ownerReview: {
-          character: '司徒少爺',
-          rating: 4.5,
-          content: '全場從頭笑到尾！機制環節非常歡樂，私聊勾心鬥角和拍賣撕逼讓人欲罷不能，完全不需要動腦，下班放鬆首選！',
-          caution: '極度適合熟人開車、放得開互相吐槽的朋友。兇案只是點綴，勝負全看誰會嘴與機制博弈。'
-        },
+        summary: '長安城第一花樓「春風閣」，一年一度的花魁大賽今夜舉行！\n各路達官顯貴、紈絝子弟、神秘豪客紛紛捧場\n拍賣喊價、偷雞摸狗、暗通款曲，究竟誰能拔得頭籌？\n今夜注定笑鬧不斷！',
+        characters: [
+          { name: '司徒少爺', desc: '揮金如土的京城紈絝，今晚勢必包下全場' },
+          { name: '玉嬌娘', desc: '春風閣當紅頭牌，一笑傾城卻心思玲瓏' },
+          { name: '柳如煙', desc: '琴棋書畫樣樣精通的清倌人，身世成謎' },
+          { name: '沈萬金', desc: '富甲一方的江南巨賈，算盤打得比誰都精' },
+          { name: '冷無情', desc: '佩劍入閣的冷面俠客，看似與風月場所格格不入' },
+          { name: '牡丹仙子', desc: '舞姿曼妙的異域佳人，眼波流轉間暗藏玄機' },
+          { name: '趙公子', desc: '風流倜儻的才子，吟詩作對卻口袋空空' }
+        ],
         reviews: [
           {
             id: 'rev-401',
@@ -365,6 +380,15 @@ const LarpModule = {
       ? row.cover
       : this.createSvgCover(row.title || '劇本', `${row.genre || '本格'} · ${row.type || '硬核'}`, ['#1e293b', '#334155', '#0f172a'], '🎭');
 
+    let characters = [];
+    if (Array.isArray(row.characters)) {
+      characters = row.characters;
+    } else if (row.owner_review && Array.isArray(row.owner_review.characters)) {
+      characters = row.owner_review.characters;
+    } else if (Array.isArray(row.owner_review)) {
+      characters = row.owner_review;
+    }
+
     return {
       id: row.id,
       title: row.title,
@@ -376,10 +400,10 @@ const LarpModule = {
       type: row.type,
       needsDm: !!row.needs_dm,
       difficulty: row.difficulty || '★★★☆☆',
-      rating: parseFloat(row.rating) || 4.5,
+      rating: parseFloat(row.rating) || 0,
       playedDate: row.played_date || '',
       summary: row.summary || '',
-      ownerReview: row.owner_review || null,
+      characters: characters,
       createdAt: row.created_at,
       reviews: reviews
     };
@@ -389,6 +413,9 @@ const LarpModule = {
     const playedDate = (script.playedDate && script.playedDate.length === 10) 
       ? script.playedDate 
       : new Date().toISOString().split('T')[0];
+
+    const avg = this.calcAverageRating(script);
+    const numericRating = avg === '?' ? 0 : (parseFloat(avg) || 0);
 
     return {
       id: script.id,
@@ -401,10 +428,12 @@ const LarpModule = {
       type: script.type || '硬核',
       needs_dm: !!script.needsDm,
       difficulty: script.difficulty || '★★★☆☆',
-      rating: parseFloat(script.rating) || 4.5,
+      rating: numericRating,
       played_date: playedDate,
       summary: script.summary || '',
-      owner_review: script.ownerReview || null
+      owner_review: (script.characters && script.characters.length > 0)
+        ? { characters: script.characters }
+        : null
     };
   },
 
@@ -596,6 +625,9 @@ const LarpModule = {
     this.state.tempReviewPhotos = [];
     this.state.tempScriptCover = null;
     this._reviewDraft = null;
+    if (view === 'create') {
+      this.initTempCharacters(6);
+    }
     document.querySelector('.bottom-nav')?.classList.remove('translate-y-full', 'pointer-events-none');
     this.renderView();
   },
@@ -767,6 +799,27 @@ const LarpModule = {
             `).join('')}
           </div>
 
+          <!-- Play Status Filters (遊玩狀態) -->
+          <div class="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-0.5">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">狀態:</span>
+            ${[
+              { id: 'all', label: '全部狀態' },
+              { id: 'played', label: '已遊玩' },
+              { id: 'unplayed', label: '未遊玩' }
+            ].map(st => `
+              <button 
+                onclick="LarpModule.setFilterStatus('${st.id}')"
+                class="tap-scale shrink-0 px-2.5 py-1 rounded-xl text-[11px] font-bold transition ${
+                  this.state.filterStatus === st.id 
+                    ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30' 
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-800'
+                }"
+              >
+                ${st.label}
+              </button>
+            `).join('')}
+          </div>
+
           <!-- Player Count & Sort Controls -->
           <div class="flex items-center justify-between pt-1">
             <!-- Player Count Filter -->
@@ -816,6 +869,7 @@ const LarpModule = {
   renderScriptCard(script) {
     const avgRating = this.calcAverageRating(script);
     const reviewsCount = script.reviews?.length || 0;
+    const played = this.isPlayed(script);
 
     return `
       <div 
@@ -825,7 +879,15 @@ const LarpModule = {
         <!-- Poster Thumbnail -->
         <div class="w-20 h-28 rounded-2xl overflow-hidden shrink-0 shadow-md border border-slate-200/50 dark:border-slate-700/50 relative bg-slate-900">
           <img src="${script.cover}" alt="${script.title}" class="w-full h-full object-cover">
-          <div class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-[9px] font-black text-amber-400 flex items-center space-x-0.5">
+          ${played ? `
+            <!-- Top-left diagonal corner ribbon: 已玩過 (Matching Screenshot 1) -->
+            <div class="absolute top-0 left-0 w-14 h-14 overflow-hidden pointer-events-none z-10 rounded-tl-2xl">
+              <div class="absolute top-[8px] left-[-24px] w-[72px] -rotate-45 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[9px] text-center py-0.5 shadow-md tracking-wider">
+                已玩過
+              </div>
+            </div>
+          ` : ''}
+          <div class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-[9px] font-black text-amber-400 flex items-center space-x-0.5 z-10">
             <span>★</span>
             <span>${avgRating}</span>
           </div>
@@ -855,6 +917,15 @@ const LarpModule = {
 
             <!-- Tags -->
             <div class="flex items-center space-x-1.5 mt-1.5 flex-wrap gap-y-1">
+              ${played ? `
+                <span class="px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/40 text-[10px] font-black">
+                  已遊玩
+                </span>
+              ` : `
+                <span class="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 text-[10px] font-bold">
+                  未遊玩
+                </span>
+              `}
               <span class="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-900/40 text-[10px] font-bold">
                 ${script.genre}
               </span>
@@ -942,9 +1013,16 @@ const LarpModule = {
             <!-- Cover Poster (Clickable Lightbox) -->
             <div 
               onclick="LarpModule.openLightbox('${script.cover}', '${script.title}')"
-              class="w-28 h-40 rounded-2xl overflow-hidden shrink-0 shadow-lg border border-slate-200/60 dark:border-slate-700/60 cursor-pointer relative group"
+              class="w-28 h-40 rounded-2xl overflow-hidden shrink-0 shadow-lg border border-slate-200/60 dark:border-slate-700/60 cursor-pointer relative group bg-slate-900"
             >
               <img src="${script.cover}" alt="${script.title}" class="w-full h-full object-cover">
+              ${this.isPlayed(script) ? `
+                <div class="absolute top-0 left-0 w-16 h-16 overflow-hidden pointer-events-none z-10 rounded-tl-2xl">
+                  <div class="absolute top-[9px] left-[-26px] w-[80px] -rotate-45 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[9px] text-center py-0.5 shadow-md tracking-wider">
+                    已玩過
+                  </div>
+                </div>
+              ` : ''}
               <div class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                 <i data-lucide="zoom-in" class="w-6 h-6 text-white"></i>
               </div>
@@ -954,10 +1032,21 @@ const LarpModule = {
             <div class="flex-1 space-y-2 min-w-0">
               <div>
                 <h2 class="text-lg font-black text-slate-900 dark:text-white leading-tight">${script.title}</h2>
-                <div class="flex items-center space-x-1 text-amber-500 font-black text-sm mt-0.5">
-                  <span>★</span>
-                  <span>${avgRating}</span>
-                  <span class="text-[10px] text-slate-400 font-normal">(${reviews.length + 1} 則評價)</span>
+                <div class="flex items-center space-x-1.5 mt-1">
+                  ${this.isPlayed(script) ? `
+                    <span class="px-2 py-0.5 rounded-md bg-amber-500 text-white font-black text-[10px] shadow-sm shadow-amber-500/20">
+                      已遊玩
+                    </span>
+                  ` : `
+                    <span class="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-[10px]">
+                      未遊玩
+                    </span>
+                  `}
+                  <div class="flex items-center space-x-1 text-amber-500 font-black text-sm">
+                    <span>★</span>
+                    <span>${avgRating}</span>
+                    <span class="text-[10px] text-slate-400 font-normal">(${reviews.length > 0 ? `${reviews.length} 則評價` : '尚未有評價'})</span>
+                  </div>
                 </div>
               </div>
 
@@ -983,42 +1072,34 @@ const LarpModule = {
           </div>
         </div>
 
-        <!-- Synopsis Card (故事背景) -->
-        <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center space-x-1.5">
-            <i data-lucide="file-text" class="w-4 h-4 text-emerald-500"></i>
-            <span>故事背景大綱</span>
+        <!-- 官方劇本介紹 (居中書寫, matching Screenshot 2) -->
+        <div class="rounded-3xl bg-slate-800/90 dark:bg-slate-800/90 p-6 border border-slate-700/60 shadow-lg text-center space-y-3">
+          <h3 class="text-base font-black text-amber-400 tracking-wider">
+            官方劇本介紹
           </h3>
-          <p class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-line">
-            ${script.summary}
+          <p class="text-xs sm:text-sm text-slate-200 leading-loose whitespace-pre-line tracking-wide">
+            ${script.summary || '暫無劇本介紹'}
           </p>
         </div>
 
-        <!-- Owner's Perspective & Review (版主特評與排雷) -->
-        ${script.ownerReview ? `
-          <div class="rounded-3xl bg-gradient-to-br from-amber-50/70 to-orange-50/40 dark:from-amber-950/30 dark:to-orange-950/10 p-4 border border-amber-200/80 dark:border-amber-900/40 shadow-sm space-y-2.5">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center space-x-1.5">
-                <span class="text-base">👑</span>
-                <span class="text-xs font-black text-amber-900 dark:text-amber-200">版主深度評語</span>
-              </div>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200/60 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">
-                角色：${script.ownerReview.character} · 給分 ${script.ownerReview.rating}★
-              </span>
+        <!-- 角色簡介 (Grid Cards, matching Screenshot 2) -->
+        <div class="rounded-3xl bg-slate-800/90 dark:bg-slate-800/90 p-6 border border-slate-700/60 shadow-lg space-y-4">
+          <h3 class="text-base font-black text-amber-400 text-center tracking-wider">
+            角色簡介
+          </h3>
+          ${script.characters && script.characters.length > 0 ? `
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              ${script.characters.map(char => `
+                <div class="p-4 rounded-xl bg-slate-900/70 border border-slate-700/50 text-center flex flex-col justify-center items-center space-y-1.5 shadow-sm">
+                  <h4 class="text-sm font-bold text-white tracking-wide">${this.escapeHtml(char.name || '未知角色')}</h4>
+                  ${char.desc ? `<p class="text-xs text-slate-300 leading-relaxed">${this.escapeHtml(char.desc)}</p>` : ''}
+                </div>
+              `).join('')}
             </div>
-
-            <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-              ${script.ownerReview.content}
-            </p>
-
-            ${script.ownerReview.caution ? `
-              <div class="p-2.5 rounded-2xl bg-white/70 dark:bg-slate-900/60 border border-amber-200/50 dark:border-amber-900/30 text-[11px] text-amber-800 dark:text-amber-300 font-medium flex items-start space-x-1.5">
-                <span class="shrink-0">⚠️</span>
-                <span><strong>體驗建議：</strong>${script.ownerReview.caution}</span>
-              </div>
-            ` : ''}
-          </div>
-        ` : ''}
+          ` : `
+            <p class="text-center text-xs text-slate-400 py-3">尚未設定角色簡介</p>
+          `}
+        </div>
 
         <!-- Community / Friends Reviews Section (好友心得牆) -->
         <div class="rounded-3xl bg-white dark:bg-slate-800/90 p-4 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
@@ -1197,9 +1278,23 @@ const LarpModule = {
                 type="text" 
                 id="rev-input-character" 
                 value="${this._reviewDraft?.character !== undefined ? this._reviewDraft.character : ''}"
-                placeholder="例如：陸澤遠"
+                placeholder="例如：姜宇桓"
                 class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               >
+              ${script.characters && script.characters.length > 0 ? `
+                <div class="flex items-center space-x-1.5 overflow-x-auto no-scrollbar pt-2">
+                  <span class="text-[10px] font-bold text-slate-400 shrink-0">快捷選取:</span>
+                  ${script.characters.map(c => `
+                    <button 
+                      type="button" 
+                      onclick="document.getElementById('rev-input-character').value = '${this.escapeHtml(c.name)}'" 
+                      class="tap-scale px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/40 text-[10px] font-bold shrink-0"
+                    >
+                      ${this.escapeHtml(c.name)}
+                    </button>
+                  `).join('')}
+                </div>
+              ` : ''}
             </div>
 
             <!-- Star Rating Control (0 ~ 5 分，每階 0.5) -->
@@ -1330,6 +1425,8 @@ const LarpModule = {
 
   // View 3: Create New Script View (版主建立劇本)
   renderCreateScriptView() {
+    const charsCount = this.state.tempCharacters ? this.state.tempCharacters.length : 6;
+
     return `
       <div class="space-y-4">
         <!-- Top Navigation -->
@@ -1373,21 +1470,24 @@ const LarpModule = {
                 >
               </label>
 
-              ${this.state.tempScriptCover ? `
-                <div class="relative w-20 h-28 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-md">
-                  <img src="${this.state.tempScriptCover}" alt="封面預覽" class="w-full h-full object-cover">
-                  <button 
-                    onclick="LarpModule.clearTempCover()"
-                    class="absolute top-1 right-1 p-0.5 rounded-full bg-red-500 text-white shadow-sm tap-scale"
-                  >
-                    <i data-lucide="x" class="w-3 h-3"></i>
-                  </button>
-                </div>
-              ` : `
-                <div class="text-[11px] text-slate-400 leading-relaxed">
-                  可上傳官方海報或手機拍下的劇本書封，系統將在前端自動壓縮成 1000px 輕量 WebP。
-                </div>
-              `}
+              <div id="script-cover-preview-box" class="flex-1">
+                ${this.state.tempScriptCover ? `
+                  <div class="relative w-20 h-28 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-md">
+                    <img src="${this.state.tempScriptCover}" alt="封面預覽" class="w-full h-full object-cover">
+                    <button 
+                      type="button" 
+                      onclick="LarpModule.clearTempCover()"
+                      class="absolute top-1 right-1 p-0.5 rounded-full bg-red-500 text-white shadow-sm tap-scale"
+                    >
+                      <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                  </div>
+                ` : `
+                  <div class="text-[11px] text-slate-400 leading-relaxed">
+                    可上傳官方海報或手機拍下的劇本書封，系統將在前端自動壓縮成 800px 輕量 WebP。
+                  </div>
+                `}
+              </div>
             </div>
           </div>
 
@@ -1422,7 +1522,8 @@ const LarpModule = {
                 id="new-script-players" 
                 min="1" 
                 max="20" 
-                value="6"
+                value="${charsCount}"
+                oninput="LarpModule.handlePlayerCountChange(this.value)"
                 class="w-full px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none"
               >
             </div>
@@ -1461,49 +1562,44 @@ const LarpModule = {
             </div>
           </div>
 
-          <!-- Summary Synopsis -->
-          <div>
-            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">故事背景簡介</label>
+          <!-- 官方劇本介紹 (居中書寫, matching Screenshot 2) -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="block text-[10px] font-bold text-amber-500 dark:text-amber-400 uppercase tracking-wider">
+                官方劇本介紹 (居中書寫) *
+              </label>
+              <span class="text-[9px] text-slate-400">文字居中顯示</span>
+            </div>
             <textarea 
               id="new-script-summary" 
-              rows="3" 
-              placeholder="簡述劇本的世界觀、主要案件背景..."
-              class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white focus:outline-none"
+              rows="4" 
+              placeholder="3 份案宗，3 起懸案，開啟塵封 10 年的血色回憶&#10;詭異的傳說，神秘的後山，莫名的證言&#10;原本寧靜的山村，究竟隱藏著什麼秘密？"
+              class="w-full px-3 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white text-center focus:outline-none focus:ring-2 focus:ring-amber-500 leading-relaxed tracking-wide"
             ></textarea>
           </div>
 
-          <!-- Owner's Personal Review -->
-          <div class="p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/30 space-y-2.5">
-            <div class="flex items-center space-x-1 text-xs font-bold text-amber-900 dark:text-amber-200">
-              <span>👑</span>
-              <span>版主個人心得評語 (選填)</span>
+          <!-- 角色介紹 (根據人數動態新增, matching Screenshot 2) -->
+          <div class="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div class="flex items-center justify-between">
+              <div>
+                <label id="create-script-chars-title" class="block text-[10px] font-bold text-amber-500 dark:text-amber-400 uppercase tracking-wider">
+                  角色介紹 (${charsCount} 位角色)
+                </label>
+                <p class="text-[10px] text-slate-400">可依人數動態調整，並填入姓名與身分簡介</p>
+              </div>
+              <button 
+                type="button" 
+                onclick="LarpModule.addTempCharacterSlot()"
+                class="tap-scale px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-900/40 text-[11px] font-bold flex items-center space-x-1"
+              >
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span>新增角色</span>
+              </button>
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
-              <input 
-                type="text" 
-                id="new-script-owner-char" 
-                placeholder="我的飾演角色 (如: 李逍遙)"
-                class="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white"
-              >
-              <input 
-                type="number" 
-                id="new-script-owner-rating" 
-                step="0.1" 
-                min="1" 
-                max="5" 
-                value="4.5" 
-                placeholder="個人評分 1~5"
-                class="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white"
-              >
+            <div id="create-script-characters-list" class="space-y-2.5">
+              ${this.renderTempCharactersList()}
             </div>
-
-            <textarea 
-              id="new-script-owner-content" 
-              rows="2" 
-              placeholder="版主個人深度體驗、推薦亮點或避雷建議..."
-              class="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white"
-            ></textarea>
           </div>
 
           <!-- Action Buttons -->
@@ -1564,6 +1660,11 @@ const LarpModule = {
     this.renderView();
   },
 
+  setFilterStatus(status) {
+    this.state.filterStatus = status;
+    this.renderView();
+  },
+
   setFilterPlayers(val) {
     this.state.filterPlayers = val;
     this.renderView();
@@ -1578,6 +1679,7 @@ const LarpModule = {
     this.state.searchQuery = '';
     this.state.filterGenre = 'all';
     this.state.filterType = 'all';
+    this.state.filterStatus = 'all';
     this.state.filterPlayers = 'all';
     this.state.sortBy = 'rating';
     this.renderView();
@@ -1589,9 +1691,9 @@ const LarpModule = {
         // Search query
         if (this.state.searchQuery) {
           const q = this.state.searchQuery.toLowerCase();
-          const matchTitle = s.title.toLowerCase().includes(q);
-          const matchGenre = s.genre.toLowerCase().includes(q);
-          const matchType = s.type.toLowerCase().includes(q);
+          const matchTitle = (s.title || '').toLowerCase().includes(q);
+          const matchGenre = (s.genre || '').toLowerCase().includes(q);
+          const matchType = (s.type || '').toLowerCase().includes(q);
           const matchSummary = (s.summary || '').toLowerCase().includes(q);
           if (!matchTitle && !matchGenre && !matchType && !matchSummary) return false;
         }
@@ -1603,6 +1705,14 @@ const LarpModule = {
 
         // Type filter
         if (this.state.filterType !== 'all' && s.type !== this.state.filterType) {
+          return false;
+        }
+
+        // Play status filter
+        if (this.state.filterStatus === 'played' && !this.isPlayed(s)) {
+          return false;
+        }
+        if (this.state.filterStatus === 'unplayed' && this.isPlayed(s)) {
           return false;
         }
 
@@ -1619,10 +1729,14 @@ const LarpModule = {
       })
       .sort((a, b) => {
         if (this.state.sortBy === 'rating') {
-          return this.calcAverageRating(b) - this.calcAverageRating(a);
+          const rA = this.calcAverageRating(a);
+          const rB = this.calcAverageRating(b);
+          const numA = rA === '?' ? -1 : Number(rA);
+          const numB = rB === '?' ? -1 : Number(rB);
+          return numB - numA;
         }
         if (this.state.sortBy === 'newest') {
-          return new Date(b.playedDate || 0) - new Date(a.playedDate || 0);
+          return new Date(b.playedDate || b.createdAt || 0) - new Date(a.playedDate || a.createdAt || 0);
         }
         if (this.state.sortBy === 'players') {
           return a.playerCount - b.playerCount;
@@ -1632,12 +1746,11 @@ const LarpModule = {
   },
 
   calcAverageRating(script) {
-    const reviews = script.reviews || [];
-    const ownerRating = script.ownerReview?.rating || script.rating || 5;
-    if (reviews.length === 0) return Number(ownerRating.toFixed(1));
+    const reviews = script?.reviews || [];
+    if (reviews.length === 0) return '?';
 
-    const total = reviews.reduce((sum, r) => sum + (Number(r.rating) || 5), ownerRating);
-    return Number((total / (reviews.length + 1)).toFixed(1));
+    const total = reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0);
+    return Number((total / reviews.length).toFixed(1));
   },
 
   revealSpoiler(reviewId) {
@@ -1807,6 +1920,145 @@ const LarpModule = {
     }
   },
 
+  escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
+
+  initTempCharacters(count = 6) {
+    const arr = [];
+    const n = Math.max(1, Math.min(20, parseInt(count, 10) || 6));
+    for (let i = 0; i < n; i++) {
+      arr.push({ name: '', desc: '' });
+    }
+    this.state.tempCharacters = arr;
+  },
+
+  handlePlayerCountChange(val) {
+    const count = Math.max(1, Math.min(20, parseInt(val, 10) || 1));
+    if (!this.state.tempCharacters) this.state.tempCharacters = [];
+    const current = this.state.tempCharacters;
+
+    if (current.length < count) {
+      for (let i = current.length; i < count; i++) {
+        current.push({ name: '', desc: '' });
+      }
+    } else if (current.length > count) {
+      current.splice(count);
+    }
+    this.state.tempCharacters = current;
+    this.renderTempCharactersDOM();
+  },
+
+  addTempCharacterSlot() {
+    if (!this.state.tempCharacters) this.state.tempCharacters = [];
+    this.state.tempCharacters.push({ name: '', desc: '' });
+    const count = this.state.tempCharacters.length;
+    const playersInput = document.getElementById('new-script-players');
+    if (playersInput) playersInput.value = count;
+    this.renderTempCharactersDOM();
+  },
+
+  removeTempCharacterSlot(idx) {
+    if (!this.state.tempCharacters || this.state.tempCharacters.length <= 1) {
+      App.showToast('至少保留一個角色欄位', 'info');
+      return;
+    }
+    this.state.tempCharacters.splice(idx, 1);
+    const count = this.state.tempCharacters.length;
+    const playersInput = document.getElementById('new-script-players');
+    if (playersInput) playersInput.value = count;
+    this.renderTempCharactersDOM();
+  },
+
+  updateTempCharacter(idx, field, val) {
+    if (this.state.tempCharacters && this.state.tempCharacters[idx]) {
+      this.state.tempCharacters[idx][field] = val;
+    }
+  },
+
+  renderTempCharactersList() {
+    const chars = this.state.tempCharacters || [];
+    return chars.map((c, idx) => `
+      <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-black text-amber-500 uppercase tracking-wider">角色 ${idx + 1}</span>
+          <button 
+            type="button" 
+            onclick="LarpModule.removeTempCharacterSlot(${idx})"
+            class="text-slate-400 hover:text-red-500 tap-scale p-1 rounded-lg"
+            title="移除此角色"
+          >
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div class="sm:col-span-1">
+            <input 
+              type="text" 
+              placeholder="角色姓名 (例: 姜宇桓)"
+              value="${this.escapeHtml(c.name || '')}"
+              oninput="LarpModule.updateTempCharacter(${idx}, 'name', this.value)"
+              class="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none"
+            >
+          </div>
+          <div class="sm:col-span-2">
+            <input 
+              type="text" 
+              placeholder="角色簡介/特點 (例: 香山市重案調查組探長)"
+              value="${this.escapeHtml(c.desc || '')}"
+              oninput="LarpModule.updateTempCharacter(${idx}, 'desc', this.value)"
+              class="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white focus:outline-none"
+            >
+          </div>
+        </div>
+      </div>
+    `).join('');
+  },
+
+  renderTempCharactersDOM() {
+    const container = document.getElementById('create-script-characters-list');
+    if (container) {
+      container.innerHTML = this.renderTempCharactersList();
+      if (window.lucide) lucide.createIcons();
+    }
+    const titleEl = document.getElementById('create-script-chars-title');
+    if (titleEl && this.state.tempCharacters) {
+      titleEl.textContent = `角色介紹 (${this.state.tempCharacters.length} 位角色)`;
+    }
+  },
+
+  updateCoverPreviewDOM() {
+    const box = document.getElementById('script-cover-preview-box');
+    if (!box) return;
+    if (this.state.tempScriptCover) {
+      box.innerHTML = `
+        <div class="relative w-20 h-28 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-md">
+          <img src="${this.state.tempScriptCover}" alt="封面預覽" class="w-full h-full object-cover">
+          <button 
+            type="button" 
+            onclick="LarpModule.clearTempCover()"
+            class="absolute top-1 right-1 p-0.5 rounded-full bg-red-500 text-white shadow-sm tap-scale"
+          >
+            <i data-lucide="x" class="w-3 h-3"></i>
+          </button>
+        </div>
+      `;
+    } else {
+      box.innerHTML = `
+        <div class="text-[11px] text-slate-400 leading-relaxed">
+          可上傳官方海報或手機拍下的劇本書封，系統將在前端自動壓縮成 800px 輕量 WebP。
+        </div>
+      `;
+    }
+    if (window.lucide) lucide.createIcons();
+  },
+
   async handleScriptCoverSelect(input) {
     if (!input.files || input.files.length === 0) return;
     const file = input.files[0];
@@ -1814,7 +2066,7 @@ const LarpModule = {
       App.showToast('正在壓縮海報封面...', 'info');
       const compressed = await this.compressImage(file, 800, 0.8);
       this.state.tempScriptCover = compressed;
-      this.renderView();
+      this.updateCoverPreviewDOM();
       App.showToast('封面已就緒！', 'success');
     } catch (err) {
       App.showToast(err.message || '封面讀取失敗', 'error');
@@ -1823,7 +2075,7 @@ const LarpModule = {
 
   clearTempCover() {
     this.state.tempScriptCover = null;
-    this.renderView();
+    this.updateCoverPreviewDOM();
   },
 
   async submitCreateScript() {
@@ -1844,11 +2096,12 @@ const LarpModule = {
     const setup = (document.getElementById('new-script-setup')?.value || '').trim() || `${Math.ceil(players/2)}男${Math.floor(players/2)}女`;
     const duration = (document.getElementById('new-script-duration')?.value || '').trim() || '4 小時';
     const needsDm = document.getElementById('new-script-dm')?.value === 'true';
-    const summary = (document.getElementById('new-script-summary')?.value || '').trim() || '暫無劇本簡介。';
+    const summary = (document.getElementById('new-script-summary')?.value || '').trim() || '暫無劇本介紹。';
 
-    const ownerChar = (document.getElementById('new-script-owner-char')?.value || '').trim();
-    const ownerRating = parseFloat(document.getElementById('new-script-owner-rating')?.value) || 4.5;
-    const ownerContent = (document.getElementById('new-script-owner-content')?.value || '').trim();
+    // Collect characters
+    const characters = (this.state.tempCharacters || [])
+      .map(c => ({ name: (c.name || '').trim(), desc: (c.desc || '').trim() }))
+      .filter(c => c.name || c.desc);
 
     // Generate cover if not uploaded
     const cover = this.state.tempScriptCover || this.createSvgCover(title, `${genre} · ${type}`, ['#1e1b4b', '#312e81', '#047857'], '🎭');
@@ -1863,15 +2116,10 @@ const LarpModule = {
       genre,
       type,
       needsDm,
-      rating: ownerRating,
-      playedDate: new Date().toISOString().split('T')[0],
+      rating: 0,
+      playedDate: '',
       summary,
-      ownerReview: ownerContent ? {
-        character: ownerChar || '版主',
-        rating: ownerRating,
-        content: ownerContent,
-        caution: ''
-      } : null,
+      characters: characters,
       reviews: []
     };
 
@@ -1891,6 +2139,7 @@ const LarpModule = {
       this.state.scripts.unshift(newScript);
       this.saveScripts();
       this.state.tempScriptCover = null;
+      this.state.tempCharacters = [];
       this.state.syncStatus = 'synced';
       this.switchView('detail', newScript.id);
       App.showToast(`✅ 已成功建立劇本《${title}》！`, 'success');
@@ -1989,7 +2238,10 @@ const LarpModule = {
   shareScript(scriptId) {
     const script = this.state.scripts.find(s => s.id === scriptId);
     if (!script) return;
-    const text = `【劇本殺推薦】《${script.title}》\n人數：${script.playerCount}人 (${script.characterSetup})\n類型：${script.genre} · ${script.type}\n評分：${this.calcAverageRating(script)} ★\n簡介：${script.summary.slice(0, 60)}...`;
+    const avg = this.calcAverageRating(script);
+    const ratingDisplay = avg === '?' ? '尚未評分' : `${avg} ★`;
+    const statusDisplay = this.isPlayed(script) ? '已遊玩' : '未遊玩';
+    const text = `【劇本殺推薦】《${script.title}》[${statusDisplay}]\n人數：${script.playerCount}人 (${script.characterSetup || '男女不限'})\n類型：${script.genre} · ${script.type}\n評分：${ratingDisplay}\n簡介：${(script.summary || '').slice(0, 60)}...`;
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
