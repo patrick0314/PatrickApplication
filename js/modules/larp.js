@@ -166,6 +166,23 @@ const LarpModule = {
     return Array.isArray(script?.reviews) && script.reviews.length > 0;
   },
 
+  // Helper to get the actual latest played date from reviews
+  getLatestPlayedDate(script) {
+    if (!script) return null;
+    const reviewDates = (script.reviews || [])
+      .map(r => r.playedDate)
+      .filter(d => d && typeof d === 'string' && d.length === 10)
+      .sort()
+      .reverse();
+    if (reviewDates.length > 0) {
+      return reviewDates[0];
+    }
+    if (this.isPlayed(script) && script.playedDate && typeof script.playedDate === 'string' && script.playedDate.length === 10) {
+      return script.playedDate;
+    }
+    return null;
+  },
+
   // Helper to generate SVG placeholder poster covers
   createSvgCover(title, subtitle, bgGradient, icon) {
     const svg = `
@@ -276,9 +293,8 @@ const LarpModule = {
   },
 
   mapScriptToRow(script) {
-    const playedDate = (script.playedDate && script.playedDate.length === 10) 
-      ? script.playedDate 
-      : new Date().toISOString().split('T')[0];
+    const latestDate = this.getLatestPlayedDate(script);
+    const playedDate = latestDate || (script.playedDate && script.playedDate.length === 10 ? script.playedDate : null);
 
     const avg = this.calcAverageRating(script);
     const numericRating = avg === '?' ? 0 : (parseFloat(avg) || 0);
@@ -709,6 +725,7 @@ const LarpModule = {
               >
                 <option value="rating" ${this.state.sortBy === 'rating' ? 'selected' : ''}>評分最高</option>
                 <option value="newest" ${this.state.sortBy === 'newest' ? 'selected' : ''}>最新遊玩</option>
+                <option value="created" ${this.state.sortBy === 'created' ? 'selected' : ''}>最新上架</option>
                 <option value="players" ${this.state.sortBy === 'players' ? 'selected' : ''}>人數多寡</option>
               </select>
             </div>
@@ -751,6 +768,7 @@ const LarpModule = {
     const avgRating = this.calcAverageRating(script);
     const reviewsCount = script.reviews?.length || 0;
     const played = this.isPlayed(script);
+    const latestPlayedDate = this.getLatestPlayedDate(script);
 
     return `
       <div 
@@ -837,11 +855,19 @@ const LarpModule = {
 
           <!-- Card Footer -->
           <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400">
-            <span>遊玩時長: ${script.duration || '約 4 小時'}</span>
-            <span class="flex items-center space-x-1 text-emerald-600 dark:text-emerald-400 font-bold">
-              <i data-lucide="message-circle" class="w-3 h-3"></i>
-              <span>${reviewsCount} 則心得</span>
-            </span>
+            <span>時長: ${script.duration || '約 4 小時'}</span>
+            <div class="flex items-center space-x-2 shrink-0">
+              ${latestPlayedDate ? `
+                <span class="flex items-center space-x-1 text-amber-600 dark:text-amber-400 font-bold" title="最新遊玩日期">
+                  <i data-lucide="calendar" class="w-3 h-3"></i>
+                  <span>${latestPlayedDate.replace(/-/g, '/')}</span>
+                </span>
+              ` : ''}
+              <span class="flex items-center space-x-1 text-emerald-600 dark:text-emerald-400 font-bold">
+                <i data-lucide="message-circle" class="w-3 h-3"></i>
+                <span>${reviewsCount} 則心得</span>
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -979,6 +1005,12 @@ const LarpModule = {
                   <span class="text-slate-400 text-[10px] font-bold">時長:</span>
                   <span>${script.duration || '約 4 小時'}</span>
                 </div>
+                ${this.getLatestPlayedDate(script) ? `
+                  <div class="flex items-center space-x-1.5">
+                    <span class="text-slate-400 text-[10px] font-bold">遊玩:</span>
+                    <span class="font-bold text-amber-600 dark:text-amber-400">${this.getLatestPlayedDate(script).replace(/-/g, '/')}</span>
+                  </div>
+                ` : ''}
                 <div class="flex items-center space-x-1.5">
                   <span class="text-slate-400 text-[10px] font-bold">主持:</span>
                   <span>${script.needsDm ? '🎙️ 需專業 DM 帶本' : '無需 DM (自動帶本)'}</span>
@@ -1899,7 +1931,29 @@ const LarpModule = {
           return numB - numA;
         }
         if (this.state.sortBy === 'newest') {
-          return new Date(b.playedDate || b.createdAt || 0) - new Date(a.playedDate || a.createdAt || 0);
+          const dateA = this.getLatestPlayedDate(a);
+          const dateB = this.getLatestPlayedDate(b);
+
+          // Both have played dates: sort by newest played date descending
+          if (dateA && dateB) {
+            const timeDiff = new Date(dateB).getTime() - new Date(dateA).getTime();
+            if (timeDiff !== 0) return timeDiff;
+          }
+
+          // A has played date, B does not: played scripts come first
+          if (dateA && !dateB) return -1;
+          // B has played date, A does not: played scripts come first
+          if (!dateA && dateB) return 1;
+
+          // Neither has played date (unplayed): sort by script creation time descending
+          const timeA = new Date(a.createdAt || 0).getTime() || parseInt((a.id || '').replace(/\D/g, ''), 10) || 0;
+          const timeB = new Date(b.createdAt || 0).getTime() || parseInt((b.id || '').replace(/\D/g, ''), 10) || 0;
+          return timeB - timeA;
+        }
+        if (this.state.sortBy === 'created') {
+          const timeA = new Date(a.createdAt || 0).getTime() || parseInt((a.id || '').replace(/\D/g, ''), 10) || 0;
+          const timeB = new Date(b.createdAt || 0).getTime() || parseInt((b.id || '').replace(/\D/g, ''), 10) || 0;
+          return timeB - timeA;
         }
         if (this.state.sortBy === 'players') {
           return a.playerCount - b.playerCount;
@@ -2552,8 +2606,10 @@ const LarpModule = {
     const avg = this.calcAverageRating(script);
     const ratingDisplay = avg === '?' ? '尚未評分' : `${avg} ★`;
     const statusDisplay = this.isPlayed(script) ? '已遊玩' : '未遊玩';
+    const latestPlayedDate = this.getLatestPlayedDate(script);
+    const dateText = latestPlayedDate ? `\n遊玩日期：${latestPlayedDate.replace(/-/g, '/')}` : '';
     const typesStr = this.getScriptTypes(script).join(' · ');
-    const text = `【劇本殺推薦】《${script.title}》[${statusDisplay}]\n人數：${script.playerCount}人 (${script.characterSetup || '男女不限'})\n類型：${script.genre} · ${typesStr}\n評分：${ratingDisplay}\n簡介：${(script.summary || '').slice(0, 60)}...`;
+    const text = `【劇本殺推薦】《${script.title}》[${statusDisplay}]${dateText}\n人數：${script.playerCount}人 (${script.characterSetup || '男女不限'})\n類型：${script.genre} · ${typesStr}\n評分：${ratingDisplay}\n簡介：${(script.summary || '').slice(0, 60)}...`;
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
