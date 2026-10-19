@@ -247,8 +247,21 @@ const LarpModule = {
   loadScripts() {
     const saved = StorageManager.get(this.STORAGE_KEY, []);
     if (saved && Array.isArray(saved)) {
-      // Strictly filter out any legacy built-in/demo script IDs
-      this.state.scripts = saved.filter(s => s && s.id && !this.DEMO_SCRIPT_IDS.includes(s.id));
+      // Strictly filter out any legacy built-in/demo script IDs & normalize multi-dimension ratings
+      this.state.scripts = saved
+        .filter(s => s && s.id && !this.DEMO_SCRIPT_IDS.includes(s.id))
+        .map(s => {
+          if (Array.isArray(s.reviews)) {
+            s.reviews.forEach(r => {
+              const base = Number(r.ratingOverall !== undefined ? r.ratingOverall : (r.rating || 5));
+              if (r.ratingOverall === undefined) r.ratingOverall = base;
+              if (r.ratingLogic === undefined) r.ratingLogic = base;
+              if (r.ratingStory === undefined) r.ratingStory = base;
+              r.rating = r.ratingOverall;
+            });
+          }
+          return s;
+        });
     } else {
       this.state.scripts = [];
     }
@@ -361,13 +374,40 @@ const LarpModule = {
       try { photos = JSON.parse(row.photos); } catch(e) { photos = []; }
     }
 
+    let content = row.content || '';
+    let ratingLogic = null;
+    let ratingStory = null;
+    let ratingOverall = null;
+
+    // Check for encoded ratings in content comment: <!--ratings:{"logic":4.8,"story":4.9,"overall":5.0}-->
+    const ratingMatch = content.match(/^<!--ratings:(\{.*?\})-->\s*/);
+    if (ratingMatch) {
+      try {
+        const parsed = JSON.parse(ratingMatch[1]);
+        if (parsed.logic !== undefined) ratingLogic = parseFloat(parsed.logic);
+        if (parsed.story !== undefined) ratingStory = parseFloat(parsed.story);
+        if (parsed.overall !== undefined) ratingOverall = parseFloat(parsed.overall);
+        content = content.slice(ratingMatch[0].length);
+      } catch (e) {
+        console.warn('[Review Rating Parse Error]', e);
+      }
+    }
+
+    const fallbackRating = parseFloat(row.rating) || 5.0;
+    if (ratingLogic === null || isNaN(ratingLogic)) ratingLogic = fallbackRating;
+    if (ratingStory === null || isNaN(ratingStory)) ratingStory = fallbackRating;
+    if (ratingOverall === null || isNaN(ratingOverall)) ratingOverall = fallbackRating;
+
     return {
       id: row.id,
       userName: row.user_name || '遊玩玩家',
       playedDate: row.played_date || '',
       character: row.character || '',
-      rating: parseFloat(row.rating) || 5.0,
-      content: row.content || '',
+      rating: ratingOverall,
+      ratingOverall: ratingOverall,
+      ratingLogic: ratingLogic,
+      ratingStory: ratingStory,
+      content: content,
       photos: photos,
       isSpoiler: !!row.is_spoiler,
       createdAt: row.created_at
@@ -379,14 +419,21 @@ const LarpModule = {
       ? review.playedDate 
       : new Date().toISOString().split('T')[0];
 
+    const ratingOverall = Number(review.ratingOverall !== undefined ? review.ratingOverall : (review.rating || 5)).toFixed(1);
+    const ratingLogic = Number(review.ratingLogic !== undefined ? review.ratingLogic : ratingOverall).toFixed(1);
+    const ratingStory = Number(review.ratingStory !== undefined ? review.ratingStory : ratingOverall).toFixed(1);
+
+    const ratingsHeader = `<!--ratings:{"logic":${ratingLogic},"story":${ratingStory},"overall":${ratingOverall}}-->`;
+    const finalContent = `${ratingsHeader}\n${review.content || ''}`;
+
     return {
       id: review.id,
       script_id: scriptId,
       user_name: review.userName || '遊玩玩家',
       played_date: playedDate,
       character: review.character || '',
-      rating: parseFloat(review.rating) || 5.0,
-      content: review.content || '',
+      rating: parseFloat(ratingOverall),
+      content: finalContent,
       photos: Array.isArray(review.photos) ? review.photos : [],
       is_spoiler: !!review.isSpoiler
     };
@@ -955,7 +1002,8 @@ const LarpModule = {
       `;
     }
 
-    const avgRating = this.calcAverageRating(script);
+    const avgRatings = this.calcAverageRatings(script);
+    const avgRating = avgRatings.overall;
     const reviews = script.reviews || [];
 
     return `
@@ -1036,21 +1084,36 @@ const LarpModule = {
                     </button>
                   ` : ''}
                 </div>
-                <div class="flex items-center space-x-1.5 mt-1">
-                  ${this.isPlayed(script) ? `
-                    <span class="px-2 py-0.5 rounded-md bg-amber-500 text-white font-black text-[10px] shadow-sm shadow-amber-500/20">
-                      已遊玩
-                    </span>
-                  ` : `
-                    <span class="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-[10px]">
-                      未遊玩
-                    </span>
-                  `}
-                  <div class="flex items-center space-x-1 text-amber-500 font-black text-sm">
-                    <span>★</span>
-                    <span>${avgRating}</span>
-                    <span class="text-[10px] text-slate-400 font-normal">(${reviews.length > 0 ? `${reviews.length} 則評價` : '尚未有評價'})</span>
+                <div class="space-y-1 mt-1">
+                  <div class="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                    ${this.isPlayed(script) ? `
+                      <span class="px-2 py-0.5 rounded-md bg-amber-500 text-white font-black text-[10px] shadow-sm shadow-amber-500/20">
+                        已遊玩
+                      </span>
+                    ` : `
+                      <span class="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-[10px]">
+                        未遊玩
+                      </span>
+                    `}
+                    <div class="flex items-center space-x-1 text-amber-500 font-black text-sm">
+                      <span>★</span>
+                      <span>${avgRatings.overall}</span>
+                      <span class="text-[10px] text-slate-400 font-normal">(${reviews.length > 0 ? `${reviews.length} 則評價` : '尚未有評價'})</span>
+                    </div>
                   </div>
+                  ${reviews.length > 0 ? `
+                    <div class="flex items-center space-x-1.5 pt-0.5 text-[10px] font-bold">
+                      <span class="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200/50 dark:border-blue-900/30">
+                        🧩 邏輯 ${avgRatings.logic}
+                      </span>
+                      <span class="px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200/50 dark:border-purple-900/30">
+                        🎭 沉浸 ${avgRatings.story}
+                      </span>
+                      <span class="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/50 dark:border-amber-900/30">
+                        ⭐ 總和 ${avgRatings.overall}
+                      </span>
+                    </div>
+                  ` : ''}
                 </div>
               </div>
 
@@ -1159,8 +1222,14 @@ const LarpModule = {
   // Single Review Item in Community Wall
   renderReviewItem(rev) {
     const isSpoilerRevealed = this.state.revealedSpoilers.has(rev.id);
-    const starString = this.renderStars(rev.rating);
-    const ratingNum = Number(rev.rating !== undefined ? rev.rating : 5).toFixed(1);
+    const overallRating = rev.ratingOverall !== undefined ? rev.ratingOverall : (rev.rating !== undefined ? rev.rating : 5);
+    const logicRating = rev.ratingLogic !== undefined ? rev.ratingLogic : overallRating;
+    const storyRating = rev.ratingStory !== undefined ? rev.ratingStory : overallRating;
+
+    const starString = this.renderStars(overallRating);
+    const overallNum = Number(overallRating).toFixed(1);
+    const logicNum = Number(logicRating).toFixed(1);
+    const storyNum = Number(storyRating).toFixed(1);
 
     return `
       <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 space-y-2">
@@ -1183,11 +1252,20 @@ const LarpModule = {
             </div>
           </div>
 
-          <div class="flex items-center space-x-1.5">
+          <div class="flex items-center space-x-1.5 shrink-0">
             <!-- Stars & Score -->
-            <div class="flex items-center space-x-1 text-xs text-amber-500 font-black tracking-tight" title="${ratingNum} 顆星">
-              <span>${starString}</span>
-              <span class="text-[10px] font-bold text-amber-600 dark:text-amber-400">(${ratingNum})</span>
+            <div class="text-right">
+              <div class="flex items-center justify-end space-x-1 text-xs text-amber-500 font-black tracking-tight" title="總和體驗：${overallNum} 顆星">
+                <span>${starString}</span>
+                <span class="text-[10px] font-bold text-amber-600 dark:text-amber-400">(${overallNum})</span>
+              </div>
+              <div class="flex items-center justify-end space-x-1 text-[9px] font-bold mt-0.5">
+                <span class="text-blue-600 dark:text-blue-400">🧩 ${logicNum}</span>
+                <span class="text-slate-300 dark:text-slate-700">·</span>
+                <span class="text-purple-600 dark:text-purple-400">🎭 ${storyNum}</span>
+                <span class="text-slate-300 dark:text-slate-700">·</span>
+                <span class="text-amber-600 dark:text-amber-400">⭐ ${overallNum}</span>
+              </div>
             </div>
 
             <!-- Admin Delete Review Button (Visible ONLY to Admins) -->
@@ -1244,7 +1322,23 @@ const LarpModule = {
     const settings = StorageManager.get('settings', { userName: '遊玩玩家' });
     const defaultName = settings.userName || '遊玩玩家';
     const todayStr = new Date().toISOString().split('T')[0];
-    const ratingVal = this._tempRating !== undefined ? this._tempRating : (this._reviewDraft?.rating !== undefined ? this._reviewDraft.rating : 5);
+    const draft = this._reviewDraft;
+
+    const initialOverall = this._tempRatings?.overall !== undefined 
+      ? this._tempRatings.overall 
+      : (draft?.ratingOverall !== undefined ? draft.ratingOverall : (draft?.rating !== undefined ? draft.rating : 5.0));
+    const initialLogic = this._tempRatings?.logic !== undefined 
+      ? this._tempRatings.logic 
+      : (draft?.ratingLogic !== undefined ? draft.ratingLogic : initialOverall);
+    const initialStory = this._tempRatings?.story !== undefined 
+      ? this._tempRatings.story 
+      : (draft?.ratingStory !== undefined ? draft.ratingStory : initialOverall);
+
+    this._tempRatings = {
+      logic: Number(initialLogic),
+      story: Number(initialStory),
+      overall: Number(initialOverall)
+    };
 
     return `
       <div 
@@ -1314,61 +1408,31 @@ const LarpModule = {
               ` : ''}
             </div>
 
-            <!-- Star Rating Control (0 ~ 5 分，每階 0.5) -->
-            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-2">
-              <div class="flex items-center justify-between">
-                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">心得評分 (0 ~ 5 星)</span>
-                <div class="flex items-center space-x-1.5">
-                  <span id="review-rating-stars" class="text-sm text-amber-500 font-bold tracking-tight">
-                    ${this.renderStars(ratingVal)}
-                  </span>
-                  <span id="review-rating-badge" class="px-2 py-0.5 rounded-lg bg-amber-500 text-white font-black text-xs shadow-sm shadow-amber-500/20">
-                    ${Number(ratingVal).toFixed(1)} ★
-                  </span>
+            <!-- Three-Dimensional Rating Controls (0.0 ~ 5.0, step 0.1) -->
+            <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-2.5">
+              <div class="flex items-center justify-between pb-1 border-b border-slate-200/50 dark:border-slate-700/50">
+                <div>
+                  <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">多面向心得評分 (0.0 ~ 5.0 ★ · 0.1 級距)</span>
+                  <span class="text-[9px] text-slate-400">分別針對邏輯、沉浸與總和體驗打分</span>
+                </div>
+                <!-- Quick Sync Button: 一鍵同步三項 -->
+                <div class="flex items-center space-x-1 text-[9px] font-bold text-slate-400">
+                  <span class="shrink-0">同步:</span>
+                  <button type="button" onclick="LarpModule.syncAllTempRatings(4.0)" class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 hover:text-amber-500 tap-scale border border-slate-200 dark:border-slate-600">4.0</button>
+                  <button type="button" onclick="LarpModule.syncAllTempRatings(4.5)" class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 hover:text-amber-500 tap-scale border border-slate-200 dark:border-slate-600">4.5</button>
+                  <button type="button" onclick="LarpModule.syncAllTempRatings(4.8)" class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 hover:text-amber-500 tap-scale border border-slate-200 dark:border-slate-600">4.8</button>
+                  <button type="button" onclick="LarpModule.syncAllTempRatings(5.0)" class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 hover:text-amber-500 tap-scale border border-slate-200 dark:border-slate-600">5.0</button>
                 </div>
               </div>
 
-              <!-- Range Slider with Step 0.5 -->
-              <div class="flex items-center space-x-2 pt-1">
-                <button 
-                  type="button" 
-                  onclick="LarpModule.adjustTempRating(-0.5)"
-                  class="tap-scale px-2 py-1 rounded-xl bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-xs shadow-sm border border-slate-200 dark:border-slate-600"
-                  title="-0.5 分"
-                >
-                  -0.5
-                </button>
+              <!-- 1. 邏輯推理 -->
+              ${this.renderRatingSliderRow('logic', '🧩', '邏輯推理', '案件邏輯、手法詭計', this._tempRatings.logic, 'accent-blue-500', 'bg-blue-600')}
 
-                <input 
-                  type="range" 
-                  id="rev-rating-slider"
-                  min="0" 
-                  max="5" 
-                  step="0.5" 
-                  value="${ratingVal}"
-                  oninput="LarpModule.setTempReviewRating(this.value)"
-                  class="flex-1 accent-amber-500 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none"
-                >
+              <!-- 2. 劇情沉浸 -->
+              ${this.renderRatingSliderRow('story', '🎭', '劇情沉浸', '人設情感、故事氛圍', this._tempRatings.story, 'accent-purple-500', 'bg-purple-600')}
 
-                <button 
-                  type="button" 
-                  onclick="LarpModule.adjustTempRating(0.5)"
-                  class="tap-scale px-2 py-1 rounded-xl bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-xs shadow-sm border border-slate-200 dark:border-slate-600"
-                  title="+0.5 分"
-                >
-                  +0.5
-                </button>
-              </div>
-
-              <!-- Quick Presets -->
-              <div class="flex items-center justify-between text-[10px] text-slate-400 font-bold pt-0.5 px-0.5">
-                <button type="button" onclick="LarpModule.setTempReviewRating(0)" class="hover:text-amber-500 tap-scale">0分</button>
-                <button type="button" onclick="LarpModule.setTempReviewRating(1)" class="hover:text-amber-500 tap-scale">1★</button>
-                <button type="button" onclick="LarpModule.setTempReviewRating(2)" class="hover:text-amber-500 tap-scale">2★</button>
-                <button type="button" onclick="LarpModule.setTempReviewRating(3)" class="hover:text-amber-500 tap-scale">3★</button>
-                <button type="button" onclick="LarpModule.setTempReviewRating(4)" class="hover:text-amber-500 tap-scale">4★</button>
-                <button type="button" onclick="LarpModule.setTempReviewRating(5)" class="hover:text-amber-500 tap-scale">5★</button>
-              </div>
+              <!-- 3. 總和體驗 -->
+              ${this.renderRatingSliderRow('overall', '⭐', '總和體驗', '節奏爽度、綜合推薦', this._tempRatings.overall, 'accent-amber-500', 'bg-amber-500')}
             </div>
 
             <!-- Review Text Area -->
@@ -2031,12 +2095,24 @@ const LarpModule = {
       });
   },
 
-  calcAverageRating(script) {
+  calcAverageRatings(script) {
     const reviews = script?.reviews || [];
-    if (reviews.length === 0) return '?';
+    if (reviews.length === 0) return { overall: '?', logic: '?', story: '?' };
 
-    const total = reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0);
-    return Number((total / reviews.length).toFixed(1));
+    const sumOverall = reviews.reduce((sum, r) => sum + (Number(r.ratingOverall !== undefined ? r.ratingOverall : r.rating) || 0), 0);
+    const sumLogic = reviews.reduce((sum, r) => sum + (Number(r.ratingLogic !== undefined ? r.ratingLogic : (r.ratingOverall !== undefined ? r.ratingOverall : r.rating)) || 0), 0);
+    const sumStory = reviews.reduce((sum, r) => sum + (Number(r.ratingStory !== undefined ? r.ratingStory : (r.ratingOverall !== undefined ? r.ratingOverall : r.rating)) || 0), 0);
+    const count = reviews.length;
+
+    return {
+      overall: Number((sumOverall / count).toFixed(1)),
+      logic: Number((sumLogic / count).toFixed(1)),
+      story: Number((sumStory / count).toFixed(1))
+    };
+  },
+
+  calcAverageRating(script) {
+    return this.calcAverageRatings(script).overall;
   },
 
   revealSpoiler(reviewId) {
@@ -2057,16 +2133,86 @@ const LarpModule = {
   renderStars(rating) {
     const val = Number(rating) || 0;
     const full = Math.floor(val);
-    const hasHalf = (val % 1) >= 0.5;
-    const empty = Math.max(0, 5 - full - (hasHalf ? 1 : 0));
-    return '★'.repeat(full) + (hasHalf ? '½' : '') + '☆'.repeat(empty);
+    const hasHalf = (val % 1) >= 0.3 && (val % 1) < 0.8;
+    const roundUp = (val % 1) >= 0.8;
+    const effectiveFull = full + (roundUp ? 1 : 0);
+    const empty = Math.max(0, 5 - effectiveFull - (hasHalf ? 1 : 0));
+    return '★'.repeat(effectiveFull) + (hasHalf ? '½' : '') + '☆'.repeat(empty);
+  },
+
+  renderRatingSliderRow(key, emoji, label, desc, val, accentClass, badgeBg) {
+    const num = Number(val !== undefined ? val : 5).toFixed(1);
+    return `
+      <div class="p-2.5 rounded-xl bg-white dark:bg-slate-900/70 border border-slate-200/60 dark:border-slate-700/60 space-y-1.5 shadow-xs">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-1.5">
+            <span class="text-sm">${emoji}</span>
+            <span class="text-xs font-black text-slate-800 dark:text-slate-100">${label}</span>
+            <span class="text-[9px] text-slate-400 hidden sm:inline">(${desc})</span>
+          </div>
+          <div class="flex items-center space-x-1.5">
+            <span id="review-stars-${key}" class="text-xs text-amber-500 font-bold tracking-tight">
+              ${this.renderStars(num)}
+            </span>
+            <span id="review-badge-${key}" class="px-2 py-0.5 rounded-md ${badgeBg} text-white font-black text-xs shadow-xs">
+              ${num} ★
+            </span>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2 pt-0.5">
+          <button 
+            type="button" 
+            onclick="LarpModule.adjustTempRating('${key}', -0.1)"
+            class="tap-scale px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-xs border border-slate-200 dark:border-slate-700"
+            title="-0.1 分"
+          >
+            -0.1
+          </button>
+
+          <input 
+            type="range" 
+            id="rev-slider-${key}"
+            min="0" 
+            max="5" 
+            step="0.1" 
+            value="${num}"
+            oninput="LarpModule.setTempReviewRating('${key}', this.value)"
+            class="flex-1 ${accentClass} cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none"
+          >
+
+          <button 
+            type="button" 
+            onclick="LarpModule.adjustTempRating('${key}', 0.1)"
+            class="tap-scale px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-xs border border-slate-200 dark:border-slate-700"
+            title="+0.1 分"
+          >
+            +0.1
+          </button>
+        </div>
+      </div>
+    `;
   },
 
   openAddReviewModal() {
     this.state.showAddReviewModal = true;
     this.state.tempReviewPhotos = [];
-    this._tempRating = 5;
-    this._reviewDraft = null;
+    const draft = this._reviewDraft;
+    const initialOverall = draft?.ratingOverall !== undefined 
+      ? draft.ratingOverall 
+      : (draft?.rating !== undefined ? draft.rating : 5.0);
+    const initialLogic = draft?.ratingLogic !== undefined 
+      ? draft.ratingLogic 
+      : initialOverall;
+    const initialStory = draft?.ratingStory !== undefined 
+      ? draft.ratingStory 
+      : initialOverall;
+
+    this._tempRatings = {
+      logic: Number(initialLogic),
+      story: Number(initialStory),
+      overall: Number(initialOverall)
+    };
     document.querySelector('.bottom-nav')?.classList.add('translate-y-full', 'pointer-events-none');
     this.renderView();
   },
@@ -2075,28 +2221,49 @@ const LarpModule = {
     this.state.showAddReviewModal = false;
     this.state.tempReviewPhotos = [];
     this._reviewDraft = null;
+    this._tempRatings = null;
     document.querySelector('.bottom-nav')?.classList.remove('translate-y-full', 'pointer-events-none');
     this.renderView();
   },
 
-  setTempReviewRating(val) {
-    const num = Math.max(0, Math.min(5, Math.round(Number(val) * 2) / 2));
-    this._tempRating = num;
-    if (this._reviewDraft) this._reviewDraft.rating = num;
+  setTempReviewRating(dimension, val) {
+    if (!this._tempRatings) {
+      this._tempRatings = { logic: 5.0, story: 5.0, overall: 5.0 };
+    }
+    const num = Math.max(0, Math.min(5, Math.round(Number(val) * 10) / 10));
+    this._tempRatings[dimension] = num;
+    if (this._reviewDraft) {
+      if (dimension === 'logic') this._reviewDraft.ratingLogic = num;
+      if (dimension === 'story') this._reviewDraft.ratingStory = num;
+      if (dimension === 'overall') {
+        this._reviewDraft.ratingOverall = num;
+        this._reviewDraft.rating = num;
+      }
+    }
 
-    const slider = document.getElementById('rev-rating-slider');
+    const slider = document.getElementById(`rev-slider-${dimension}`);
     if (slider) slider.value = num;
 
-    const badge = document.getElementById('review-rating-badge');
+    const badge = document.getElementById(`review-badge-${dimension}`);
     if (badge) badge.textContent = `${num.toFixed(1)} ★`;
 
-    const stars = document.getElementById('review-rating-stars');
+    const stars = document.getElementById(`review-stars-${dimension}`);
     if (stars) stars.textContent = this.renderStars(num);
   },
 
-  adjustTempRating(delta) {
-    const current = Number(this._tempRating !== undefined ? this._tempRating : 5);
-    this.setTempReviewRating(current + delta);
+  adjustTempRating(dimension, delta) {
+    if (!this._tempRatings) {
+      this._tempRatings = { logic: 5.0, story: 5.0, overall: 5.0 };
+    }
+    const current = Number(this._tempRatings[dimension] !== undefined ? this._tempRatings[dimension] : 5.0);
+    this.setTempReviewRating(dimension, current + delta);
+  },
+
+  syncAllTempRatings(val) {
+    const num = Math.max(0, Math.min(5, Math.round(Number(val) * 10) / 10));
+    ['logic', 'story', 'overall'].forEach(dim => {
+      this.setTempReviewRating(dim, num);
+    });
   },
 
   renderReviewPhotoThumbnails() {
@@ -2151,7 +2318,10 @@ const LarpModule = {
     const character = (document.getElementById('rev-input-character')?.value || '').trim();
     const content = (document.getElementById('rev-input-content')?.value || '').trim();
     const isSpoiler = document.getElementById('rev-input-spoiler')?.checked || false;
-    const rating = Math.max(0, Math.min(5, Math.round(Number(this._tempRating !== undefined ? this._tempRating : 5) * 2) / 2));
+
+    const ratingLogic = Math.max(0, Math.min(5, Math.round(Number(this._tempRatings?.logic !== undefined ? this._tempRatings.logic : 5) * 10) / 10));
+    const ratingStory = Math.max(0, Math.min(5, Math.round(Number(this._tempRatings?.story !== undefined ? this._tempRatings.story : 5) * 10) / 10));
+    const ratingOverall = Math.max(0, Math.min(5, Math.round(Number(this._tempRatings?.overall !== undefined ? this._tempRatings.overall : 5) * 10) / 10));
 
     if (!content) {
       App.showToast('請填寫心得感想', 'warning');
@@ -2163,7 +2333,10 @@ const LarpModule = {
       userName: name,
       playedDate: date,
       character: character,
-      rating: rating,
+      rating: ratingOverall,
+      ratingOverall: ratingOverall,
+      ratingLogic: ratingLogic,
+      ratingStory: ratingStory,
       content: content,
       photos: [...this.state.tempReviewPhotos],
       isSpoiler: isSpoiler,
@@ -2199,7 +2372,9 @@ const LarpModule = {
         character,
         content,
         isSpoiler,
-        rating
+        ratingLogic,
+        ratingStory,
+        ratingOverall
       };
       this.openAddReviewModal();
       App.showToast('發布失敗：' + (err.message || '雲端連線異常，請稍後再試'), 'error');
