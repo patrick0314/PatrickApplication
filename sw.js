@@ -1,4 +1,4 @@
-const CACHE_NAME = 'my-app-v50';
+const CACHE_NAME = 'my-app-v51';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -61,7 +61,7 @@ self.addEventListener('fetch', (event) => {
   if (event.request.url.includes('supabase.co')) return;
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
+    caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200) {
           const responseToCache = networkResponse.clone();

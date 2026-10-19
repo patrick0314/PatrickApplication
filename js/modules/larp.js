@@ -142,7 +142,40 @@ const LarpModule = {
     if (this._initialized) return;
     this._initialized = true;
     this.loadScripts();
+    this.checkUrlRoute();
     this.syncWithSupabase();
+  },
+
+  checkUrlRoute() {
+    try {
+      const hash = window.location.hash.replace(/^#\/?/, '').trim();
+      if (hash) {
+        const [pathPart, queryPart] = hash.split('?');
+        const segments = pathPart.split('/').filter(Boolean);
+        if (segments[0] === 'larp' && segments[1]) {
+          this.state.currentView = 'detail';
+          this.state.selectedScriptId = decodeURIComponent(segments[1]);
+          return;
+        }
+        if (queryPart) {
+          const params = new URLSearchParams(queryPart);
+          const qScript = params.get('script') || params.get('id');
+          if (qScript) {
+            this.state.currentView = 'detail';
+            this.state.selectedScriptId = qScript;
+            return;
+          }
+        }
+      }
+      const searchParams = new URLSearchParams(window.location.search);
+      const searchScript = searchParams.get('script') || searchParams.get('id');
+      if (searchScript) {
+        this.state.currentView = 'detail';
+        this.state.selectedScriptId = searchScript;
+      }
+    } catch (e) {
+      console.warn('[LARP Route] Error checking route:', e);
+    }
   },
 
   // Helper to get script styles as array
@@ -466,7 +499,7 @@ const LarpModule = {
   },
 
   // Navigation
-  switchView(view, scriptId = null) {
+  switchView(view, scriptId = null, updateHistory = true) {
     this.state.currentView = view;
     if (scriptId) this.state.selectedScriptId = scriptId;
     this.state.showAddReviewModal = false;
@@ -493,6 +526,20 @@ const LarpModule = {
         }
       }
     }
+
+    if (updateHistory) {
+      if (view === 'detail' && this.state.selectedScriptId) {
+        const targetHash = `#larp/${encodeURIComponent(this.state.selectedScriptId)}`;
+        if (window.location.hash !== targetHash) {
+          history.pushState({ tab: 'larp', view: 'detail', scriptId: this.state.selectedScriptId }, '', targetHash);
+        }
+      } else if (view === 'list') {
+        if (window.location.hash !== '#larp') {
+          history.pushState({ tab: 'larp', view: 'list' }, '', '#larp');
+        }
+      }
+    }
+
     document.querySelector('.bottom-nav')?.classList.remove('translate-y-full', 'pointer-events-none');
     this.renderView();
   },
@@ -878,9 +925,31 @@ const LarpModule = {
   renderDetailView() {
     const script = this.state.scripts.find(s => s.id === this.state.selectedScriptId);
     if (!script) {
+      if (this.state.syncStatus === 'syncing' || !this.state.lastSyncedAt) {
+        return `
+          <div class="space-y-4 pb-20">
+            <!-- Top Navigation -->
+            <div class="flex items-center justify-between pt-1">
+              <button onclick="LarpModule.switchView('list')" class="flex items-center space-x-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 tap-scale">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                <span>返回劇本列表</span>
+              </button>
+            </div>
+            <div class="text-center py-20 space-y-4 rounded-3xl bg-white dark:bg-slate-800/90 p-8 border border-slate-100 dark:border-slate-800 shadow-sm">
+              <div class="inline-flex p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 animate-spin">
+                <i data-lucide="loader-2" class="w-8 h-8"></i>
+              </div>
+              <div class="space-y-1">
+                <p class="text-sm font-bold text-slate-800 dark:text-slate-100">正在載入劇本資訊...</p>
+                <p class="text-xs text-slate-400 dark:text-slate-500">正在與雲端同步最新劇本內容與心得評價，請稍候</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }
       return `
-        <div class="text-center py-12 space-y-3">
-          <p class="text-xs text-slate-400">找不到此劇本資料</p>
+        <div class="text-center py-16 space-y-3">
+          <p class="text-sm text-slate-400">找不到此劇本資料，可能已被移除</p>
           <button onclick="LarpModule.switchView('list')" class="text-xs font-bold text-emerald-500 underline">返回列表</button>
         </div>
       `;
@@ -925,7 +994,7 @@ const LarpModule = {
               </button>
             ` : ''}
 
-            <button onclick="LarpModule.shareScript('${script.id}')" class="tap-scale p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300" title="複製劇本資訊">
+            <button onclick="LarpModule.shareScript('${script.id}')" class="tap-scale p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300" title="複製此劇本專屬頁面連結">
               <i data-lucide="share-2" class="w-4 h-4"></i>
             </button>
           </div>
@@ -2600,26 +2669,49 @@ const LarpModule = {
     });
   },
 
+  copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(() => true).catch(() => this.fallbackCopyToClipboard(text));
+    }
+    return Promise.resolve(this.fallbackCopyToClipboard(text));
+  },
+
+  fallbackCopyToClipboard(text) {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.top = '-9999px';
+      textarea.style.left = '-9999px';
+      textarea.setAttribute('readonly', '');
+      document.body.appendChild(textarea);
+      textarea.select();
+      textarea.setSelectionRange(0, textarea.value.length);
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return !!successful;
+    } catch (e) {
+      console.warn('[Clipboard] Fallback copy failed:', e);
+      return false;
+    }
+  },
+
   shareScript(scriptId) {
     const script = this.state.scripts.find(s => s.id === scriptId);
     if (!script) return;
-    const avg = this.calcAverageRating(script);
-    const ratingDisplay = avg === '?' ? '尚未評分' : `${avg} ★`;
-    const statusDisplay = this.isPlayed(script) ? '已遊玩' : '未遊玩';
-    const latestPlayedDate = this.getLatestPlayedDate(script);
-    const dateText = latestPlayedDate ? `\n遊玩日期：${latestPlayedDate.replace(/-/g, '/')}` : '';
-    const typesStr = this.getScriptTypes(script).join(' · ');
-    const text = `【劇本殺推薦】《${script.title}》[${statusDisplay}]${dateText}\n人數：${script.playerCount}人 (${script.characterSetup || '男女不限'})\n類型：${script.genre} · ${typesStr}\n評分：${ratingDisplay}\n簡介：${(script.summary || '').slice(0, 60)}...`;
 
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(() => {
-        App.showToast('已複製劇本簡介至剪貼簿！', 'success');
-      }).catch(() => {
-        App.showToast('複製失敗', 'error');
-      });
-    } else {
-      App.showToast('您的瀏覽器不支援自動複製', 'warning');
-    }
+    // Generate absolute direct URL to this script detail
+    const baseUrl = window.location.href.split('#')[0].split('?')[0];
+    const shareUrl = `${baseUrl}#larp/${encodeURIComponent(script.id)}`;
+
+    this.copyToClipboard(shareUrl).then((success) => {
+      if (success) {
+        App.showToast(`🔗 已複製《${script.title}》劇本專屬頁面連結！`, 'success');
+        if ('vibrate' in navigator) navigator.vibrate(20);
+      } else {
+        window.prompt('請複製此劇本專屬頁面連結：', shareUrl);
+      }
+    });
   },
 
   resetToDemoData() {

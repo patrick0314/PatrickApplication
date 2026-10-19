@@ -67,7 +67,11 @@ const App = {
       }
     });
 
+    this.handleInitialRoute();
     this.render();
+
+    window.addEventListener('popstate', () => this.handleRouteUpdate());
+    window.addEventListener('hashchange', () => this.handleRouteUpdate());
 
     window.addEventListener('myapp:storage-updated', () => {
       this.updateHeader();
@@ -78,6 +82,84 @@ const App = {
       this.updateHeader();
       this.render();
     });
+  },
+
+  parseRoute() {
+    try {
+      const hash = window.location.hash.replace(/^#\/?/, '').trim();
+      if (hash) {
+        const [pathPart, queryPart] = hash.split('?');
+        const segments = pathPart.split('/').filter(Boolean);
+        const tab = segments[0] ? segments[0].toLowerCase() : null;
+        const subId = segments[1] ? decodeURIComponent(segments[1]) : null;
+        let queryScript = null;
+        if (queryPart) {
+          const params = new URLSearchParams(queryPart);
+          queryScript = params.get('script') || params.get('id');
+        }
+        return { tab, scriptId: subId || queryScript };
+      }
+
+      const searchParams = new URLSearchParams(window.location.search);
+      const searchScript = searchParams.get('script') || searchParams.get('id');
+      const searchTab = searchParams.get('tab');
+      if (searchScript) {
+        return { tab: searchTab ? searchTab.toLowerCase() : 'larp', scriptId: searchScript };
+      }
+      if (searchTab) {
+        return { tab: searchTab.toLowerCase(), scriptId: null };
+      }
+    } catch (e) {
+      console.warn('[Router] Failed to parse route:', e);
+    }
+    return null;
+  },
+
+  handleInitialRoute() {
+    const route = this.parseRoute();
+    if (!route || !route.tab) return;
+
+    const targetModule = this.modules.find(m => m.id === route.tab);
+    if (targetModule) {
+      this.activeTab = targetModule.id;
+      if (targetModule.id === 'larp' && route.scriptId && window.LarpModule) {
+        LarpModule.state.currentView = 'detail';
+        LarpModule.state.selectedScriptId = route.scriptId;
+      }
+    }
+  },
+
+  handleRouteUpdate() {
+    const route = this.parseRoute();
+    const targetTab = (route && route.tab && this.modules.some(m => m.id === route.tab)) ? route.tab : 'dashboard';
+    const targetScriptId = (targetTab === 'larp' && route) ? route.scriptId : null;
+
+    let needsRender = false;
+
+    if (this.activeTab !== targetTab) {
+      this.activeTab = targetTab;
+      needsRender = true;
+    }
+
+    if (targetTab === 'larp' && window.LarpModule) {
+      if (targetScriptId) {
+        if (LarpModule.state.currentView !== 'detail' || LarpModule.state.selectedScriptId !== targetScriptId) {
+          LarpModule.state.currentView = 'detail';
+          LarpModule.state.selectedScriptId = targetScriptId;
+          needsRender = true;
+        }
+      } else {
+        if (LarpModule.state.currentView !== 'list') {
+          LarpModule.state.currentView = 'list';
+          needsRender = true;
+        }
+      }
+    }
+
+    if (needsRender) {
+      this.render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   },
 
   updateHeader() {
@@ -128,11 +210,22 @@ const App = {
     }
   },
 
-  switchTab(tabId) {
-    if (this.activeTab === tabId) return;
+  switchTab(tabId, updateHistory = true) {
+    const isDifferent = this.activeTab !== tabId;
     this.activeTab = tabId;
     
-    if ('vibrate' in navigator) navigator.vibrate(10);
+    if ('vibrate' in navigator && isDifferent) navigator.vibrate(10);
+
+    if (updateHistory) {
+      const targetHash = tabId === 'dashboard' ? '' : `#${tabId}`;
+      if (window.location.hash !== targetHash) {
+        if (targetHash === '') {
+          history.pushState({ tab: 'dashboard' }, '', window.location.pathname + window.location.search);
+        } else {
+          history.pushState({ tab: tabId }, '', targetHash);
+        }
+      }
+    }
 
     this.render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -162,7 +255,7 @@ const App = {
     const displayedModules = this.modules.filter(m => this.navTabs.includes(m.id));
 
     navContainer.innerHTML = displayedModules.map(mod => {
-      const isActive = mod.id === this.activeTab || (mod.id === 'dashboard' && (this.activeTab === 'werewolf' || this.activeTab === 'codenames'));
+      const isActive = mod.id === this.activeTab || (mod.id === 'dashboard' && this.activeTab !== 'settings');
       const badgeCount = mod.badge ? mod.badge() : 0;
 
       return `
